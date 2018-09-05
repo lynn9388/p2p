@@ -16,17 +16,29 @@
 
 package p2p
 
+import (
+	"net"
+	"sync"
+
+	"github.com/dedis/student_18/dgcosi/code/onet/log"
+	"google.golang.org/grpc"
+)
+
 // Node is a independent entity in the P2P network.
 type Node struct {
-	self  Peer
-	peers map[string]Peer
+	self        Peer
+	server      *grpc.Server
+	peers       map[string]Peer
+	connections map[string]*grpc.ClientConn
+	mux         sync.RWMutex
 }
 
 // NewNode initials a new node with specific host IP and port.
 func NewNode(host string, port int) Node {
 	return Node{
-		self:  Peer{Host: host, Port: int32(port)},
-		peers: make(map[string]Peer),
+		self:        Peer{Host: host, Port: int32(port)},
+		peers:       make(map[string]Peer),
+		connections: make(map[string]*grpc.ClientConn),
 	}
 }
 
@@ -38,17 +50,93 @@ func (n *Node) IsSelf(p *Peer) bool {
 // AddPeer adds a peer to the node's peer list.
 func (n *Node) AddPeer(p *Peer) {
 	if !n.IsSelf(p) {
+		n.mux.Lock()
 		n.peers[p.GetAddr()] = *p
+		n.mux.Unlock()
 	}
 }
 
 // AddPeer removes a peer from the node's peer list.
 func (n *Node) RemovePeer(p *Peer) {
+	n.disconnectPeer(p)
+	n.mux.Lock()
 	delete(n.peers, p.GetAddr())
+	n.mux.Unlock()
 }
 
 // HasPeer checks if a peer is in the node's peer list.
 func (n *Node) HasPeer(p *Peer) bool {
+	n.mux.RLock()
 	_, ok := n.peers[p.GetAddr()]
+	n.mux.RUnlock()
 	return ok
+}
+
+// StartServer starts server to serve node request.
+func (n *Node) StartServer() {
+	lis, err := net.Listen("tcp", n.self.GetAddr())
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	n.server = grpc.NewServer()
+	// register server here
+
+	log.Printf("server is listening at: %v", n.self.GetAddr())
+	go n.server.Serve(lis)
+}
+
+// StopServer closes all connections and stop the server.
+func (n *Node) StopServer() {
+	n.mux.Lock()
+	defer n.mux.Unlock()
+	for _, conn := range n.connections {
+		conn.Close()
+	}
+
+	if n.server != nil {
+		n.server.Stop()
+		log.Print("server stopped")
+	}
+}
+
+// connectPeer connects a peer if the node hasn't connected to it, or
+// reconnects the peer otherwise.
+func (n *Node) connectPeer(p *Peer) (*grpc.ClientConn, error) {
+	n.disconnectPeer(p)
+	conn, err := grpc.Dial(p.GetAddr(), grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+
+	n.mux.Lock()
+	n.connections[p.GetAddr()] = conn
+	n.mux.Unlock()
+	return conn, nil
+}
+
+// disconnectPeer disconnects the connection if the node has connected to the
+// peer.
+func (n *Node) disconnectPeer(p *Peer) {
+	n.mux.Lock()
+	defer n.mux.Unlock()
+	conn, ok := n.connections[p.GetAddr()]
+	if ok {
+		conn.Close()
+	}
+}
+
+// GetConnection returns a connection between the node and the peer.
+func (n *Node) GetConnection(p *Peer) (*grpc.ClientConn, error) {
+	n.mux.RLock()
+	conn, ok := n.connections[p.GetAddr()]
+	n.mux.RUnlock()
+	if !ok {
+		var err error
+		conn, err = n.connectPeer(p)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return conn, nil
 }

@@ -49,3 +49,20 @@ func TestNode_HasPeer(t *testing.T) {
 		}
 	}
 }
+
+func TestNode_GetConnection(t *testing.T) {
+	node1 := NewNode("localhost", 9388)
+	node2 := NewNode("localhost", 9389)
+	node1.StartServer()
+	defer node1.StopServer()
+
+	conn, err := node2.GetConnection(&node1.self)
+	if err != nil {
+		t.Error(err)
+	}
+	defer conn.Close()
+
+	if state := conn.GetState().String(); state != "IDLE" {
+		t.Error(state)
+	}
+}
