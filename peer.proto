@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package p2p;
+
+// Peer is the minimum entity that a node can communicate.
+message Peer {
+    string host = 1;
+    int32 port = 2;
+}
