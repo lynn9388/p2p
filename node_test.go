@@ -17,7 +17,10 @@
 package p2p
 
 import (
+	"context"
 	"testing"
+
+	"github.com/golang/protobuf/ptypes/empty"
 )
 
 func TestNode_IsSelf(t *testing.T) {
@@ -64,5 +67,52 @@ func TestNode_GetConnection(t *testing.T) {
 
 	if state := conn.GetState().String(); state != "IDLE" {
 		t.Error(state)
+	}
+}
+
+func TestNode_Ping(t *testing.T) {
+	node1 := NewNode("localhost", 9388)
+	node2 := NewNode("localhost", 9389)
+	node1.StartServer()
+	defer node1.StopServer()
+
+	conn, err := node2.GetConnection(&node1.self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	client := NewNodeServiceClient(conn)
+	pong, err := client.Ping(context.Background(), &PingPong{Message: PingPong_PING})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if pong.Message != PingPong_PONG {
+		t.Fatalf("invalid pong message: %v", pong.Message)
+	}
+}
+
+func TestNode_GetPeers(t *testing.T) {
+	node1 := NewNode("localhost", 9390)
+	node2 := NewNode("localhost", 9389)
+	node1.StartServer()
+	node1.AddPeer(&node2.self)
+	defer node1.StopServer()
+
+	conn, err := node2.GetConnection(&node1.self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	client := NewNodeServiceClient(conn)
+	peers, err := client.GetPeers(context.Background(), &empty.Empty{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(peers.GetPeers()) != 1 {
+		t.Fail()
 	}
 }

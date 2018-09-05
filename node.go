@@ -17,10 +17,14 @@
 package p2p
 
 import (
+	"errors"
+	"log"
 	"net"
 	"sync"
 
-	"github.com/dedis/student_18/dgcosi/code/onet/log"
+	"github.com/golang/protobuf/ptypes/empty"
+
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
@@ -56,7 +60,7 @@ func (n *Node) AddPeer(p *Peer) {
 	}
 }
 
-// AddPeer removes a peer from the node's peer list.
+// RemovePeer removes a peer from the node's peer list.
 func (n *Node) RemovePeer(p *Peer) {
 	n.disconnectPeer(p)
 	n.mux.Lock()
@@ -81,6 +85,7 @@ func (n *Node) StartServer() {
 
 	n.server = grpc.NewServer()
 	// register server here
+	RegisterNodeServiceServer(n.server, n)
 
 	log.Printf("server is listening at: %v", n.self.GetAddr())
 	go n.server.Serve(lis)
@@ -139,4 +144,23 @@ func (n *Node) GetConnection(p *Peer) (*grpc.ClientConn, error) {
 		}
 	}
 	return conn, nil
+}
+
+// Ping returns pong message when received ping message.
+func (n *Node) Ping(ctx context.Context, ping *PingPong) (*PingPong, error) {
+	if ping.Message != PingPong_PING {
+		return nil, errors.New("invalid ping message: " + ping.Message.String())
+	}
+	return &PingPong{Message: PingPong_PONG}, nil
+}
+
+// GetPeers return a list of peer to client.
+func (n *Node) GetPeers(context.Context, *empty.Empty) (*Peers, error) {
+	peers := make([]*Peer, 0)
+
+	for _, p := range n.peers {
+		peers = append(peers, &p)
+	}
+
+	return &Peers{Peers: peers}, nil
 }
