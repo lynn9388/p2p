@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -49,6 +48,7 @@ func NewNode(host string, port int) Node {
 		leaveNetwork: make(chan struct{}),
 		peers:        make(map[string]Peer),
 		connections:  make(map[string]*grpc.ClientConn),
+		mux:          sync.RWMutex{},
 	}
 }
 
@@ -192,7 +192,7 @@ func (n *Node) discoverPeers(p *Peer) ([]Peer, error) {
 	}
 
 	client := NewNodeServiceClient(conn)
-	peers, err := client.GetPeers(context.Background(), &empty.Empty{})
+	peers, err := client.GetPeers(context.Background(), &n.self)
 	if err != nil {
 		return nil, err
 	}
@@ -255,11 +255,14 @@ func (n *Node) Ping(ctx context.Context, ping *PingPong) (*PingPong, error) {
 }
 
 // GetPeers return a list of peer to client.
-func (n *Node) GetPeers(context.Context, *empty.Empty) (*Peers, error) {
+func (n *Node) GetPeers(ctx context.Context, p *Peer) (*Peers, error) {
 	var peers []*Peer
+
 	ps := n.getPeers()
 	for i := range ps {
 		peers = append(peers, &ps[i])
 	}
+
+	n.AddPeers(*p)
 	return &Peers{Peers: peers}, nil
 }

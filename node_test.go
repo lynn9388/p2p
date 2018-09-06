@@ -173,7 +173,6 @@ func TestNode_GetPeers(t *testing.T) {
 	node1 := NewNode("localhost", 9390)
 	node2 := NewNode("localhost", 9389)
 	node1.StartServer()
-	node1.AddPeers(node2.self)
 	defer node1.StopServer()
 
 	conn, err := node2.GetConnection(&node1.self)
@@ -183,12 +182,19 @@ func TestNode_GetPeers(t *testing.T) {
 	defer conn.Close()
 
 	client := NewNodeServiceClient(conn)
-	peers, err := client.GetPeers(context.Background(), &empty.Empty{})
+	peers, err := client.GetPeers(context.Background(), &node2.self)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(peers.GetPeers()) != 0 && node1.getPeersNum() != 1 {
+		t.Fail()
+	}
 
-	if len(peers.GetPeers()) != 1 {
+	peers, err = client.GetPeers(context.Background(), &node2.self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(peers.GetPeers()) != 1 && node1.getPeersNum() != 1 {
 		t.Fail()
 	}
 }
