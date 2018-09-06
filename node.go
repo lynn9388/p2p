@@ -41,6 +41,7 @@ type Node struct {
 func NewNode(host string, port int) Node {
 	return Node{
 		self:        Peer{Host: host, Port: int32(port)},
+		server:      grpc.NewServer(),
 		peers:       make(map[string]Peer),
 		connections: make(map[string]*grpc.ClientConn),
 	}
@@ -76,6 +77,12 @@ func (n *Node) HasPeer(p *Peer) bool {
 	return ok
 }
 
+// RegisterService register external service. this must be called before
+// starting server.
+func (n *Node) RegisterService(desc *grpc.ServiceDesc, srv interface{}) {
+	n.server.RegisterService(desc, srv)
+}
+
 // StartServer starts server to serve node request.
 func (n *Node) StartServer() {
 	lis, err := net.Listen("tcp", n.self.GetAddr())
@@ -83,8 +90,7 @@ func (n *Node) StartServer() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	n.server = grpc.NewServer()
-	// register server here
+	// register internal service
 	RegisterNodeServiceServer(n.server, n)
 
 	log.Printf("server is listening at: %v", n.self.GetAddr())

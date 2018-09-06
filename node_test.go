@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/golang/protobuf/ptypes/wrappers"
+
 	"github.com/golang/protobuf/ptypes/empty"
 )
 
@@ -50,6 +52,38 @@ func TestNode_HasPeer(t *testing.T) {
 		if node.HasPeer(&peer) {
 			t.Errorf("%v HasPeer %v = true", node, addr)
 		}
+	}
+}
+
+type hello struct{}
+
+var helloWorld = "Hello, world!"
+
+func (h *hello) Hello(context.Context, *empty.Empty) (*wrappers.StringValue, error) {
+	return &wrappers.StringValue{Value: helloWorld}, nil
+}
+
+func TestNode_RegisterService(t *testing.T) {
+	node1 := NewNode("localhost", 9388)
+	node2 := NewNode("localhost", 9389)
+	node1.RegisterService(&_TestService_serviceDesc, &hello{})
+	node1.StartServer()
+	defer node1.StopServer()
+
+	conn, err := node2.GetConnection(&node1.self)
+	if err != nil {
+		t.Error(err)
+	}
+	defer conn.Close()
+
+	client := NewTestServiceClient(conn)
+	hello, err := client.Hello(context.Background(), &empty.Empty{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if hello.Value != helloWorld {
+		t.Fail()
 	}
 }
 
