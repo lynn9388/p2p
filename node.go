@@ -38,6 +38,7 @@ type Node struct {
 	peers        map[string]Peer
 	connections  map[string]*grpc.ClientConn
 	mux          sync.RWMutex
+	waiter       sync.WaitGroup
 }
 
 // NewNode initials a new node with specific host IP and port.
@@ -49,6 +50,7 @@ func NewNode(host string, port int) Node {
 		peers:        make(map[string]Peer),
 		connections:  make(map[string]*grpc.ClientConn),
 		mux:          sync.RWMutex{},
+		waiter:       sync.WaitGroup{},
 	}
 }
 
@@ -209,6 +211,7 @@ func (n *Node) discoverPeers(p *Peer) ([]Peer, error) {
 func (n *Node) JoinNetwork(bootstraps ...Peer) {
 	n.AddPeers(bootstraps...)
 
+	n.waiter.Add(1)
 	go func() {
 		for {
 			if n.getPeersNum() < maxConnNum {
@@ -227,6 +230,7 @@ func (n *Node) JoinNetwork(bootstraps ...Peer) {
 
 			select {
 			case <-n.leaveNetwork:
+				n.waiter.Done()
 				return
 			case <-time.After(maxSleepTime):
 				continue
@@ -244,6 +248,11 @@ func (n *Node) LeaveNetwork() {
 	for _, conn := range n.connections {
 		conn.Close()
 	}
+}
+
+// Wait keeps node running in background.
+func (n *Node) Wait() {
+	n.waiter.Wait()
 }
 
 // Ping returns pong message when received ping message.
