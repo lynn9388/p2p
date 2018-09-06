@@ -19,6 +19,7 @@ package p2p
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
 
@@ -43,7 +44,7 @@ func TestNode_HasPeer(t *testing.T) {
 			t.Errorf("%v HasPeer %v = true", node, addr)
 		}
 
-		node.AddPeer(&peer)
+		node.AddPeers(peer)
 		if !node.HasPeer(&peer) {
 			t.Errorf("%v HasPeer %v = false", node, addr)
 		}
@@ -51,6 +52,27 @@ func TestNode_HasPeer(t *testing.T) {
 		node.RemovePeer(&peer)
 		if node.HasPeer(&peer) {
 			t.Errorf("%v HasPeer %v = true", node, addr)
+		}
+	}
+}
+
+func TestNode_getPeers(t *testing.T) {
+	node := NewNode("localhost", 9388)
+	for _, p := range tests {
+		node.AddPeers(p)
+	}
+
+	peers := node.getPeers()
+	for _, p := range tests {
+		var exists bool
+		for _, peer := range peers {
+			if peer.GetAddr() == p.GetAddr() {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			t.Errorf("not exist %v", p.GetAddr())
 		}
 	}
 }
@@ -104,6 +126,26 @@ func TestNode_GetConnection(t *testing.T) {
 	}
 }
 
+func TestNode_JoinNetwork(t *testing.T) {
+	node1 := NewNode("localhost", 9388)
+	node2 := NewNode("localhost", 9389)
+	node1.StartServer()
+	defer node1.StopServer()
+
+	var peers []Peer
+	for _, p := range tests {
+		peers = append(peers, p)
+	}
+	node1.AddPeers(peers...)
+
+	node2.JoinNetwork(node1.self)
+	time.Sleep(1 * time.Second)
+	node2.LeaveNetwork()
+	if node2.getPeersNum() != len(tests)+1 {
+		t.Fail()
+	}
+}
+
 func TestNode_Ping(t *testing.T) {
 	node1 := NewNode("localhost", 9388)
 	node2 := NewNode("localhost", 9389)
@@ -131,7 +173,7 @@ func TestNode_GetPeers(t *testing.T) {
 	node1 := NewNode("localhost", 9390)
 	node2 := NewNode("localhost", 9389)
 	node1.StartServer()
-	node1.AddPeer(&node2.self)
+	node1.AddPeers(node2.self)
 	defer node1.StopServer()
 
 	conn, err := node2.GetConnection(&node1.self)

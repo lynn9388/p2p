@@ -21,29 +21,34 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/ptypes/empty"
-
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
+const maxSleepTime = 5 * time.Second
+const maxConnNum = 20
+
 // Node is a independent entity in the P2P network.
 type Node struct {
-	self        Peer
-	server      *grpc.Server
-	peers       map[string]Peer
-	connections map[string]*grpc.ClientConn
-	mux         sync.RWMutex
+	self         Peer
+	server       *grpc.Server
+	leaveNetwork chan struct{}
+	peers        map[string]Peer
+	connections  map[string]*grpc.ClientConn
+	mux          sync.RWMutex
 }
 
 // NewNode initials a new node with specific host IP and port.
 func NewNode(host string, port int) Node {
 	return Node{
-		self:        Peer{Host: host, Port: int32(port)},
-		server:      grpc.NewServer(),
-		peers:       make(map[string]Peer),
-		connections: make(map[string]*grpc.ClientConn),
+		self:         Peer{Host: host, Port: int32(port)},
+		server:       grpc.NewServer(),
+		leaveNetwork: make(chan struct{}),
+		peers:        make(map[string]Peer),
+		connections:  make(map[string]*grpc.ClientConn),
 	}
 }
 
@@ -52,12 +57,17 @@ func (n *Node) IsSelf(p *Peer) bool {
 	return n.self.Host == p.Host && n.self.Port == p.Port
 }
 
-// AddPeer adds a peer to the node's peer list.
-func (n *Node) AddPeer(p *Peer) {
-	if !n.IsSelf(p) {
-		n.mux.Lock()
-		n.peers[p.GetAddr()] = *p
-		n.mux.Unlock()
+// AddPeers adds peers to the node's peer list.
+func (n *Node) AddPeers(ps ...Peer) {
+	n.mux.Lock()
+	defer n.mux.Unlock()
+	for _, p := range ps {
+		if !n.IsSelf(&p) {
+			if _, ok := n.peers[p.GetAddr()]; !ok {
+				n.peers[p.GetAddr()] = p
+				log.Printf("%v add peer: %v", n.self.GetAddr(), p.GetAddr())
+			}
+		}
 	}
 }
 
@@ -75,6 +85,26 @@ func (n *Node) HasPeer(p *Peer) bool {
 	_, ok := n.peers[p.GetAddr()]
 	n.mux.RUnlock()
 	return ok
+}
+
+// getPeers returns all the peers in the node's peer list.
+func (n *Node) getPeers() []Peer {
+	var ps []Peer
+
+	n.mux.RLock()
+	for _, p := range n.peers {
+		ps = append(ps, p)
+	}
+	n.mux.RUnlock()
+
+	return ps
+}
+
+// getPeersNum returns the number of peers in the node's peer list.
+func (n *Node) getPeersNum() int {
+	n.mux.RLock()
+	defer n.mux.RUnlock()
+	return len(n.peers)
 }
 
 // RegisterService register external service. this must be called before
@@ -152,6 +182,70 @@ func (n *Node) GetConnection(p *Peer) (*grpc.ClientConn, error) {
 	return conn, nil
 }
 
+// discoverPeers requests other neighbor peers from a connected peer.
+func (n *Node) discoverPeers(p *Peer) ([]Peer, error) {
+	var ps []Peer
+
+	conn, err := n.GetConnection(p)
+	if err != nil {
+		return nil, err
+	}
+
+	client := NewNodeServiceClient(conn)
+	peers, err := client.GetPeers(context.Background(), &empty.Empty{})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, p := range peers.Peers {
+		ps = append(ps, *p)
+	}
+
+	return ps, nil
+}
+
+// JoinNetwork discovers new peers via bootstraps until have enough peers in
+// peer list.
+func (n *Node) JoinNetwork(bootstraps ...Peer) {
+	n.AddPeers(bootstraps...)
+
+	go func() {
+		for {
+			if n.getPeersNum() < maxConnNum {
+				for _, p := range n.getPeers() {
+					peers, err := n.discoverPeers(&p)
+					if err != nil {
+						log.Print(err)
+						continue
+					}
+					n.AddPeers(peers...)
+					if n.getPeersNum() > maxConnNum {
+						break
+					}
+				}
+			}
+
+			select {
+			case <-n.leaveNetwork:
+				return
+			case <-time.After(maxSleepTime):
+				continue
+			}
+		}
+	}()
+}
+
+// LeaveNetwork stop discovering new peers and disconnect all connections.
+func (n *Node) LeaveNetwork() {
+	n.leaveNetwork <- struct{}{}
+
+	n.mux.Lock()
+	defer n.mux.Unlock()
+	for _, conn := range n.connections {
+		conn.Close()
+	}
+}
+
 // Ping returns pong message when received ping message.
 func (n *Node) Ping(ctx context.Context, ping *PingPong) (*PingPong, error) {
 	if ping.Message != PingPong_PING {
@@ -162,11 +256,10 @@ func (n *Node) Ping(ctx context.Context, ping *PingPong) (*PingPong, error) {
 
 // GetPeers return a list of peer to client.
 func (n *Node) GetPeers(context.Context, *empty.Empty) (*Peers, error) {
-	peers := make([]*Peer, 0)
-
-	for _, p := range n.peers {
-		peers = append(peers, &p)
+	var peers []*Peer
+	ps := n.getPeers()
+	for i := range ps {
+		peers = append(peers, &ps[i])
 	}
-
 	return &Peers{Peers: peers}, nil
 }
