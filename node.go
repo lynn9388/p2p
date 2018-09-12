@@ -109,12 +109,6 @@ func (n *Node) getPeersNum() int {
 	return len(n.peers)
 }
 
-// RegisterService register external service. this must be called before
-// starting server.
-func (n *Node) RegisterService(desc *grpc.ServiceDesc, srv interface{}) {
-	n.server.RegisterService(desc, srv)
-}
-
 // StartServer starts server to serve node request.
 func (n *Node) StartServer() {
 	lis, err := net.Listen("tcp", n.self.GetAddr())
