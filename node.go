@@ -73,6 +73,11 @@ func NewNode(addr string) Node {
 // StartServer starts server to provide services. This must be called after
 // registering any other external service.
 func (n *Node) StartServer() {
+	conn, _ := net.DialTimeout("tcp", n.Addr, 5*time.Second)
+	if conn != nil {
+		conn.Close()
+	}
+
 	lis, err := net.Listen("tcp", n.Addr)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
