@@ -22,7 +22,6 @@ import (
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"log"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -57,10 +56,10 @@ func init() {
 	}
 }
 
-// NewNode initials a new node with specific host IP and port.
-func NewNode(host string, port int) Node {
+// NewNode initials a new node with specific network address.
+func NewNode(addr string) Node {
 	return Node{
-		Addr:   net.JoinHostPort(host, strconv.Itoa(port)),
+		Addr:   addr,
 		Server: grpc.NewServer(),
 
 		Peers: make(map[string]*Peer),
@@ -86,17 +85,11 @@ func (n *Node) StartServer() {
 	go n.Server.Serve(lis)
 }
 
-// StopServer closes all connections and stop the server.
+// StopServer stops the server.
 func (n *Node) StopServer() {
-	n.Mux.Lock()
-	for _, p := range n.Peers {
-		p.Disconnect()
-	}
-	n.Mux.Unlock()
-
 	if n.Server != nil {
 		n.Server.Stop()
-		log.Print("server stopped")
+		log.Printf("server stopped: %v", n.Addr)
 	}
 }
 
@@ -163,7 +156,10 @@ func (n *Node) JoinNetwork(bootstraps ...string) {
 	go func() {
 		for {
 			if n.getPeersNum() < maxPeerNum {
-				for _, p := range n.getPeers() {
+				n.Mux.RLock()
+				peers := n.Peers
+				n.Mux.RUnlock()
+				for _, p := range peers {
 					peers, err := p.GetPeers(n.Addr)
 					if err != nil {
 						log.Print(err)
@@ -179,6 +175,7 @@ func (n *Node) JoinNetwork(bootstraps ...string) {
 			select {
 			case <-n.leave:
 				n.waiter.Done()
+				n.leave <- struct{}{}
 				return
 			case <-time.After(maxSleepTime):
 				continue
@@ -189,13 +186,19 @@ func (n *Node) JoinNetwork(bootstraps ...string) {
 
 // LeaveNetwork stop discovering new peers and disconnect all connections.
 func (n *Node) LeaveNetwork() {
+	// request to stop discovering new peers
 	n.leave <- struct{}{}
 
+	// wait for discovering new peers stopped
+	<-n.leave
+
 	n.Mux.Lock()
-	defer n.Mux.Unlock()
 	for _, p := range n.Peers {
-		p.Disconnect()
+		if err := p.Disconnect(); err != nil {
+			log.Print(err)
+		}
 	}
+	n.Mux.Unlock()
 }
 
 // Wait keeps node running in background.
