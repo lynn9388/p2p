@@ -18,7 +18,7 @@ package p2p
 
 import (
 	"context"
-	"github.com/dedis/student_18/dgcosi/code/onet/log"
+
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -37,7 +37,7 @@ func (p *Peer) GetConnection() (*grpc.ClientConn, error) {
 		p.conn.GetState() != connectivity.Ready {
 		if p.conn != nil {
 			if err := p.Disconnect(); err != nil {
-				log.Print(err)
+				log.Error(err)
 			}
 		}
 		conn, err := grpc.Dial(p.Addr, grpc.WithInsecure())
@@ -45,7 +45,7 @@ func (p *Peer) GetConnection() (*grpc.ClientConn, error) {
 			return nil, err
 		}
 		p.conn = conn
-		log.Printf("connected: %v", p.Addr)
+		log.Debugf("connected: %v", p.Addr)
 	}
 
 	return p.conn, nil
@@ -57,7 +57,7 @@ func (p *Peer) Disconnect() error {
 		if err := p.conn.Close(); err != nil {
 			return errors.New("failed to close connection: " + err.Error())
 		}
-		log.Printf("closed: %v", p.Addr)
+		log.Debugf("closed: %v", p.Addr)
 	}
 	return nil
 }

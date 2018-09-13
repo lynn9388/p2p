@@ -24,12 +24,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dedis/student_18/dgcosi/code/onet/log"
+	"go.uber.org/zap"
+
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 )
 
 var (
+	log *zap.SugaredLogger
+
 	maxSleepTime time.Duration
 	maxPeerNum   int
 )
@@ -47,6 +50,9 @@ type Node struct {
 }
 
 func init() {
+	logger, _ := zap.NewDevelopment()
+	log = logger.Sugar()
+
 	if flag.Lookup("test.v") == nil {
 		maxSleepTime = 5 * time.Second
 		maxPeerNum = 20
@@ -86,7 +92,7 @@ func (n *Node) StartServer() {
 	// register internal service
 	RegisterNodeServiceServer(n.Server, n)
 
-	log.Printf("server is listening at: %v", n.Addr)
+	log.Infof("server is listening at: %v", n.Addr)
 	go n.Server.Serve(lis)
 }
 
@@ -94,7 +100,7 @@ func (n *Node) StartServer() {
 func (n *Node) StopServer() {
 	if n.Server != nil {
 		n.Server.Stop()
-		log.Printf("server stopped: %v", n.Addr)
+		log.Infof("server stopped: %v", n.Addr)
 	}
 }
 
@@ -108,7 +114,7 @@ func (n *Node) AddPeers(addresses ...string) {
 		if n.Addr != addr {
 			if _, ok := n.Peers[addr]; !ok {
 				n.Peers[addr] = &Peer{Addr: addr}
-				log.Printf("%v adds peer: %v", n.Addr, addr)
+				log.Debugf("%v adds peer: %v", n.Addr, addr)
 			}
 		}
 	}
@@ -126,7 +132,7 @@ func (n *Node) RemovePeer(addr string) error {
 		}
 
 		delete(n.Peers, p.Addr)
-		log.Printf("%v removes peer: %v", n.Addr, p.Addr)
+		log.Debugf("%v removes peer: %v", n.Addr, p.Addr)
 	}
 
 	return nil
@@ -175,7 +181,7 @@ func (n *Node) JoinNetwork(bootstraps ...string) {
 				for _, p := range peers {
 					peers, err := p.GetPeers(n.Addr)
 					if err != nil {
-						log.Print(err)
+						log.Error(err)
 						continue
 					}
 					n.AddPeers(peers...)
@@ -208,7 +214,7 @@ func (n *Node) LeaveNetwork() {
 	n.Mux.Lock()
 	for _, p := range n.Peers {
 		if err := p.Disconnect(); err != nil {
-			log.Print(err)
+			log.Error(err)
 		}
 	}
 	n.Mux.Unlock()
