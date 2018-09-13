@@ -22,7 +22,7 @@ import (
 )
 
 func TestPeer_GetConnection(t *testing.T) {
-	node := NewNode("localhost", 9388)
+	node := NewNode("localhost:9488")
 	node.StartServer()
 	defer node.StopServer()
 
@@ -39,14 +39,14 @@ func TestPeer_GetConnection(t *testing.T) {
 }
 
 func TestPeer_Disconnect(t *testing.T) {
-	node := NewNode("localhost", 9388)
+	node := NewNode("localhost:9488")
 	node.StartServer()
 	defer node.StopServer()
 
 	peer := Peer{Addr: node.Addr}
 
-	if peer.Disconnect() != nil {
-		t.Error("failed to disconnect unconnected peer")
+	if err := peer.Disconnect(); err != nil {
+		t.Errorf("failed to disconnect unconnected peer: %v", err)
 	}
 
 	conn, err := peer.GetConnection()
@@ -57,19 +57,21 @@ func TestPeer_Disconnect(t *testing.T) {
 		t.Errorf("failed to get connection (expect IDLE): %v", state)
 	}
 
-	peer.Disconnect()
+	if err := peer.Disconnect(); err != nil {
+		t.Errorf("failed to disconnect peer: %v", err)
+	}
 	if state := conn.GetState(); state != connectivity.Shutdown {
 		t.Errorf("failed to close connection (expect SHUTDOWN): %v", state)
 	}
 }
 
 func TestPeer_GetPeers(t *testing.T) {
-	node := NewNode("localhost", 9388)
+	node := NewNode("localhost:9488")
 	node.StartServer()
 	defer node.StopServer()
 
 	nodePeer := Peer{Addr: node.Addr}
-	testPeer := Peer{Addr: "localhost:9488"}
+	testPeer := Peer{Addr: "localhost:9588"}
 	peers, err := nodePeer.GetPeers(testPeer.Addr)
 	if err != nil {
 		t.Error(err)
