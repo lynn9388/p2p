@@ -14,15 +14,63 @@
  * limitations under the License.
  */
 
-// Package p2p implements a node in P2P network.
 package p2p
 
 import (
-	"net"
-	"strconv"
+	"context"
+	"github.com/dedis/student_18/dgcosi/code/onet/log"
+	"github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 )
 
-// GetAddr returns a network address of the peer with the form "host:port".
-func (p *Peer) GetAddr() string {
-	return net.JoinHostPort(p.Host, strconv.Itoa(int(p.Port)))
+// Peer is the the remote node that a local node can connect to.
+type Peer struct {
+	Addr string
+	conn *grpc.ClientConn
+}
+
+// GetConnection returns a connection to the peer.
+func (p *Peer) GetConnection() (*grpc.ClientConn, error) {
+	if p.conn == nil || p.conn.GetState() != connectivity.Idle ||
+		p.conn.GetState() != connectivity.Ready {
+		if p.conn != nil {
+			p.conn.Close()
+		}
+		conn, err := grpc.Dial(p.Addr, grpc.WithInsecure())
+		if err != nil {
+			return nil, err
+		}
+		p.conn = conn
+		log.Printf("connected %v", p.Addr)
+	}
+
+	return p.conn, nil
+}
+
+// Disconnect closes the connection to the peer.
+func (p *Peer) Disconnect() error {
+	var err error
+	if p.conn != nil {
+		err = p.conn.Close()
+		if err != nil {
+			log.Printf("closed %v", p.Addr)
+		}
+	}
+	return nil
+}
+
+// GetPeers requests other neighbor peers from the remote peer.
+func (p *Peer) GetPeers(addr string) ([]string, error) {
+	conn, err := p.GetConnection()
+	if err != nil {
+		return nil, err
+	}
+	client := NewNodeServiceClient(conn)
+	peers, err := client.GetPeers(context.Background(), &wrappers.StringValue{Value: addr})
+	if err != nil {
+		return nil, errors.New("failed to get peers: " + err.Error())
+	}
+	return peers.Peers, nil
 }

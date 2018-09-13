@@ -17,148 +17,123 @@
 package p2p
 
 import (
-	"context"
+	"google.golang.org/grpc/connectivity"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
 
-func TestNode_IsSelf(t *testing.T) {
-	for addr, peer := range tests {
-		node := NewNode(peer.Host, int(peer.Port))
-		for a, p := range tests {
-			if a == addr && !node.IsSelf(&p) {
-				t.Errorf("IsSelft of %v = false", addr)
-			}
-		}
-	}
+var tests = []string{
+	"127.0.0.1:9388",
+	"192.168.1.1:9388",
 }
 
-func TestNode_HasPeer(t *testing.T) {
+func TestNode_AddPeers(t *testing.T) {
 	node := NewNode("localhost", 9388)
-	for addr, peer := range tests {
-		if node.HasPeer(&peer) {
-			t.Errorf("%v HasPeer %v = true", node, addr)
-		}
+	waiter := sync.WaitGroup{}
 
-		node.AddPeers(peer)
-		if !node.HasPeer(&peer) {
-			t.Errorf("%v HasPeer %v = false", node, addr)
-		}
+	for i := 0; i < 10; i++ {
+		waiter.Add(1)
+		go func(port int) {
+			node.AddPeers("localhost:" + strconv.Itoa(port))
+			waiter.Done()
+		}(i)
+	}
+	waiter.Wait()
 
-		node.RemovePeer(&peer)
-		if node.HasPeer(&peer) {
-			t.Errorf("%v HasPeer %v = true", node, addr)
-		}
+	if len(node.Peers) != 10 {
+		t.Error(len(node.Peers))
 	}
 }
 
-func TestNode_getPeers(t *testing.T) {
+func TestNode_RemovePeer(t *testing.T) {
 	node := NewNode("localhost", 9388)
-	for _, p := range tests {
-		node.AddPeers(p)
+
+	for i := 0; i < 10; i++ {
+		node.AddPeers("localhost:" + strconv.Itoa(i))
 	}
 
-	peers := node.getPeers()
-	for _, p := range tests {
-		var exists bool
-		for _, peer := range peers {
-			if peer.GetAddr() == p.GetAddr() {
-				exists = true
-				break
+	waiter := sync.WaitGroup{}
+	for i := 0; i < 5; i++ {
+		waiter.Add(1)
+		go func(port int) {
+			if err := node.RemovePeer("localhost:" + strconv.Itoa(port)); err != nil {
+				t.Error(err)
 			}
-		}
-		if !exists {
-			t.Errorf("not exist %v", p.GetAddr())
-		}
+			waiter.Done()
+		}(i)
 	}
-}
-
-func TestNode_GetConnection(t *testing.T) {
-	node1 := NewNode("localhost", 9388)
-	node2 := NewNode("localhost", 9389)
-	node1.StartServer()
-	defer node1.StopServer()
-
-	conn, err := node2.GetConnection(&node1.self)
-	if err != nil {
-		t.Error(err)
-	}
-	defer conn.Close()
-
-	if state := conn.GetState().String(); state != "IDLE" {
-		t.Error(state)
+	waiter.Wait()
+	if len(node.Peers) != 5 {
+		t.Error(len(node.Peers))
 	}
 }
 
 func TestNode_JoinNetwork(t *testing.T) {
 	node1 := NewNode("localhost", 9388)
-	node2 := NewNode("localhost", 9389)
+	node2 := NewNode("localhost", 9488)
+
 	node1.StartServer()
 	defer node1.StopServer()
+	node1.AddPeers(tests...)
 
-	var peers []Peer
-	for _, p := range tests {
-		peers = append(peers, p)
-	}
-	node1.AddPeers(peers...)
-
-	node2.JoinNetwork(node1.self)
+	node2.JoinNetwork(node1.Addr)
+	defer node2.LeaveNetwork()
 	time.Sleep(1 * time.Second)
-	node2.LeaveNetwork()
 	if node2.getPeersNum() != len(tests)+1 {
-		t.Fail()
+		t.Errorf("failed to join the network: %v", node2.getPeersNum())
 	}
 }
 
-func TestNode_Ping(t *testing.T) {
+func TestNode_LeaveNetwork(t *testing.T) {
 	node1 := NewNode("localhost", 9388)
-	node2 := NewNode("localhost", 9389)
+	node2 := NewNode("localhost", 9488)
+
 	node1.StartServer()
 	defer node1.StopServer()
+	node1.AddPeers(tests...)
 
-	conn, err := node2.GetConnection(&node1.self)
-	if err != nil {
-		t.Fatal(err)
+	node2.JoinNetwork(node1.Addr)
+	time.Sleep(1 * time.Second)
+
+	for _, p := range node2.Peers {
+		p.GetConnection()
 	}
-	defer conn.Close()
-
-	client := NewNodeServiceClient(conn)
-	pong, err := client.Ping(context.Background(), &PingPong{Message: PingPong_PING})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if pong.Message != PingPong_PONG {
-		t.Fatalf("invalid pong message: %v", pong.Message)
+	node2.LeaveNetwork()
+	for _, p := range node2.getPeers() {
+		if state := p.conn.GetState(); state != connectivity.Shutdown {
+			t.Errorf("failed to leave network: %v ", state)
+		}
 	}
 }
 
-func TestNode_GetPeers(t *testing.T) {
-	node1 := NewNode("localhost", 9390)
-	node2 := NewNode("localhost", 9389)
-	node1.StartServer()
-	defer node1.StopServer()
-
-	conn, err := node2.GetConnection(&node1.self)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-
-	client := NewNodeServiceClient(conn)
-	peers, err := client.GetPeers(context.Background(), &node2.self)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(peers.GetPeers()) != 0 && node1.getPeersNum() != 1 {
-		t.Fail()
-	}
-
-	peers, err = client.GetPeers(context.Background(), &node2.self)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(peers.GetPeers()) != 1 && node1.getPeersNum() != 1 {
-		t.Fail()
-	}
-}
+//func TestNode_GetPeers(t *testing.T) {
+//	node1 := NewNode("localhost", 9390)
+//	node2 := NewNode("localhost", 9389)
+//	node1.StartServer()
+//	defer node1.StopServer()
+//
+//	conn, err := node2.GetConnection(&node1.self)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	defer conn.Close()
+//
+//	client := NewNodeServiceClient(conn)
+//	peers, err := client.GetPeers(context.Background(), &node2.self)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	if len(peers.GetPeers()) != 0 && node1.getPeersNum() != 1 {
+//		t.Fail()
+//	}
+//
+//	peers, err = client.GetPeers(context.Background(), &node2.self)
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	if len(peers.GetPeers()) != 1 && node1.getPeersNum() != 1 {
+//		t.Fail()
+//	}
+//}

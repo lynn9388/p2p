@@ -6,6 +6,7 @@ package p2p
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
+import wrappers "github.com/golang/protobuf/ptypes/wrappers"
 
 import (
 	context "golang.org/x/net/context"
@@ -23,79 +24,9 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-type PingPong_Message int32
-
-const (
-	PingPong_PING PingPong_Message = 0
-	PingPong_PONG PingPong_Message = 1
-)
-
-var PingPong_Message_name = map[int32]string{
-	0: "PING",
-	1: "PONG",
-}
-var PingPong_Message_value = map[string]int32{
-	"PING": 0,
-	"PONG": 1,
-}
-
-func (x PingPong_Message) String() string {
-	return proto.EnumName(PingPong_Message_name, int32(x))
-}
-func (PingPong_Message) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_p2p_3eedf351463b3c31, []int{2, 0}
-}
-
-// Peer is the minimum entity that a node can communicate.
-type Peer struct {
-	Host                 string   `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
-	Port                 int32    `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
-}
-
-func (m *Peer) Reset()         { *m = Peer{} }
-func (m *Peer) String() string { return proto.CompactTextString(m) }
-func (*Peer) ProtoMessage()    {}
-func (*Peer) Descriptor() ([]byte, []int) {
-	return fileDescriptor_p2p_3eedf351463b3c31, []int{0}
-}
-func (m *Peer) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_Peer.Unmarshal(m, b)
-}
-func (m *Peer) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_Peer.Marshal(b, m, deterministic)
-}
-func (dst *Peer) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_Peer.Merge(dst, src)
-}
-func (m *Peer) XXX_Size() int {
-	return xxx_messageInfo_Peer.Size(m)
-}
-func (m *Peer) XXX_DiscardUnknown() {
-	xxx_messageInfo_Peer.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_Peer proto.InternalMessageInfo
-
-func (m *Peer) GetHost() string {
-	if m != nil {
-		return m.Host
-	}
-	return ""
-}
-
-func (m *Peer) GetPort() int32 {
-	if m != nil {
-		return m.Port
-	}
-	return 0
-}
-
-// Peers is a wrapper for list of peer
+// Peers is a list of peer's network address
 type Peers struct {
-	Peers                []*Peer  `protobuf:"bytes,1,rep,name=peers,proto3" json:"peers,omitempty"`
+	Peers                []string `protobuf:"bytes,1,rep,name=Peers,proto3" json:"Peers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -105,7 +36,7 @@ func (m *Peers) Reset()         { *m = Peers{} }
 func (m *Peers) String() string { return proto.CompactTextString(m) }
 func (*Peers) ProtoMessage()    {}
 func (*Peers) Descriptor() ([]byte, []int) {
-	return fileDescriptor_p2p_3eedf351463b3c31, []int{1}
+	return fileDescriptor_p2p_a397304a6711e508, []int{0}
 }
 func (m *Peers) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Peers.Unmarshal(m, b)
@@ -125,57 +56,15 @@ func (m *Peers) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_Peers proto.InternalMessageInfo
 
-func (m *Peers) GetPeers() []*Peer {
+func (m *Peers) GetPeers() []string {
 	if m != nil {
 		return m.Peers
 	}
 	return nil
 }
 
-// PingPong is the valid message of ping.
-type PingPong struct {
-	Message              PingPong_Message `protobuf:"varint,1,opt,name=message,proto3,enum=p2p.PingPong_Message" json:"message,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
-	XXX_unrecognized     []byte           `json:"-"`
-	XXX_sizecache        int32            `json:"-"`
-}
-
-func (m *PingPong) Reset()         { *m = PingPong{} }
-func (m *PingPong) String() string { return proto.CompactTextString(m) }
-func (*PingPong) ProtoMessage()    {}
-func (*PingPong) Descriptor() ([]byte, []int) {
-	return fileDescriptor_p2p_3eedf351463b3c31, []int{2}
-}
-func (m *PingPong) XXX_Unmarshal(b []byte) error {
-	return xxx_messageInfo_PingPong.Unmarshal(m, b)
-}
-func (m *PingPong) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	return xxx_messageInfo_PingPong.Marshal(b, m, deterministic)
-}
-func (dst *PingPong) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_PingPong.Merge(dst, src)
-}
-func (m *PingPong) XXX_Size() int {
-	return xxx_messageInfo_PingPong.Size(m)
-}
-func (m *PingPong) XXX_DiscardUnknown() {
-	xxx_messageInfo_PingPong.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_PingPong proto.InternalMessageInfo
-
-func (m *PingPong) GetMessage() PingPong_Message {
-	if m != nil {
-		return m.Message
-	}
-	return PingPong_PING
-}
-
 func init() {
-	proto.RegisterType((*Peer)(nil), "p2p.Peer")
 	proto.RegisterType((*Peers)(nil), "p2p.Peers")
-	proto.RegisterType((*PingPong)(nil), "p2p.PingPong")
-	proto.RegisterEnum("p2p.PingPong_Message", PingPong_Message_name, PingPong_Message_value)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -190,8 +79,7 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type NodeServiceClient interface {
-	Ping(ctx context.Context, in *PingPong, opts ...grpc.CallOption) (*PingPong, error)
-	GetPeers(ctx context.Context, in *Peer, opts ...grpc.CallOption) (*Peers, error)
+	GetPeers(ctx context.Context, in *wrappers.StringValue, opts ...grpc.CallOption) (*Peers, error)
 }
 
 type nodeServiceClient struct {
@@ -202,16 +90,7 @@ func NewNodeServiceClient(cc *grpc.ClientConn) NodeServiceClient {
 	return &nodeServiceClient{cc}
 }
 
-func (c *nodeServiceClient) Ping(ctx context.Context, in *PingPong, opts ...grpc.CallOption) (*PingPong, error) {
-	out := new(PingPong)
-	err := c.cc.Invoke(ctx, "/p2p.NodeService/Ping", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *nodeServiceClient) GetPeers(ctx context.Context, in *Peer, opts ...grpc.CallOption) (*Peers, error) {
+func (c *nodeServiceClient) GetPeers(ctx context.Context, in *wrappers.StringValue, opts ...grpc.CallOption) (*Peers, error) {
 	out := new(Peers)
 	err := c.cc.Invoke(ctx, "/p2p.NodeService/GetPeers", in, out, opts...)
 	if err != nil {
@@ -222,34 +101,15 @@ func (c *nodeServiceClient) GetPeers(ctx context.Context, in *Peer, opts ...grpc
 
 // NodeServiceServer is the server API for NodeService service.
 type NodeServiceServer interface {
-	Ping(context.Context, *PingPong) (*PingPong, error)
-	GetPeers(context.Context, *Peer) (*Peers, error)
+	GetPeers(context.Context, *wrappers.StringValue) (*Peers, error)
 }
 
 func RegisterNodeServiceServer(s *grpc.Server, srv NodeServiceServer) {
 	s.RegisterService(&_NodeService_serviceDesc, srv)
 }
 
-func _NodeService_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PingPong)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).Ping(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/p2p.NodeService/Ping",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).Ping(ctx, req.(*PingPong))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _NodeService_GetPeers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Peer)
+	in := new(wrappers.StringValue)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -261,7 +121,7 @@ func _NodeService_GetPeers_Handler(srv interface{}, ctx context.Context, dec fun
 		FullMethod: "/p2p.NodeService/GetPeers",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).GetPeers(ctx, req.(*Peer))
+		return srv.(NodeServiceServer).GetPeers(ctx, req.(*wrappers.StringValue))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -271,10 +131,6 @@ var _NodeService_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*NodeServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Ping",
-			Handler:    _NodeService_Ping_Handler,
-		},
-		{
 			MethodName: "GetPeers",
 			Handler:    _NodeService_GetPeers_Handler,
 		},
@@ -283,22 +139,17 @@ var _NodeService_serviceDesc = grpc.ServiceDesc{
 	Metadata: "p2p.proto",
 }
 
-func init() { proto.RegisterFile("p2p.proto", fileDescriptor_p2p_3eedf351463b3c31) }
+func init() { proto.RegisterFile("p2p.proto", fileDescriptor_p2p_a397304a6711e508) }
 
-var fileDescriptor_p2p_3eedf351463b3c31 = []byte{
-	// 217 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x54, 0x90, 0x4f, 0x4b, 0x03, 0x31,
-	0x14, 0xc4, 0x8d, 0xcd, 0xda, 0xdd, 0x57, 0x94, 0xf2, 0x40, 0x58, 0x0a, 0xe2, 0x1a, 0x3c, 0xe4,
-	0x14, 0x21, 0x7e, 0x88, 0xc5, 0x83, 0x6b, 0x88, 0xe0, 0xc1, 0x9b, 0x7f, 0x1e, 0x6b, 0x0f, 0x36,
-	0x21, 0x09, 0x7e, 0x7e, 0x49, 0x52, 0x2d, 0xbd, 0xfd, 0x32, 0x33, 0x4c, 0x86, 0x07, 0x9d, 0xd7,
-	0x5e, 0xf9, 0xe0, 0x92, 0xc3, 0x85, 0xd7, 0x5e, 0x28, 0xe0, 0x86, 0x28, 0x20, 0x02, 0xff, 0x72,
-	0x31, 0xf5, 0x6c, 0x60, 0xb2, 0xb3, 0x85, 0xb3, 0xe6, 0x5d, 0x48, 0xfd, 0xe9, 0xc0, 0x64, 0x63,
-	0x0b, 0x0b, 0x09, 0x4d, 0xce, 0x47, 0xbc, 0x86, 0xc6, 0x67, 0xe8, 0xd9, 0xb0, 0x90, 0x2b, 0xdd,
-	0xa9, 0x5c, 0x9c, 0x2d, 0x5b, 0x75, 0xf1, 0x0a, 0xad, 0xd9, 0xee, 0x66, 0xe3, 0x76, 0x33, 0xde,
-	0xc1, 0xf2, 0x9b, 0x62, 0x7c, 0x9b, 0xa9, 0x7c, 0x70, 0xa1, 0x2f, 0x6b, 0x7c, 0xef, 0xab, 0xc7,
-	0x6a, 0xda, 0xbf, 0x94, 0xb8, 0x82, 0xe5, 0x5e, 0xc3, 0x16, 0xb8, 0x79, 0x98, 0xc6, 0xf5, 0x49,
-	0xa1, 0xa7, 0x69, 0x5c, 0x33, 0xfd, 0x02, 0xab, 0xc9, 0x7d, 0xd2, 0x33, 0x85, 0x9f, 0xed, 0x07,
-	0xe1, 0x2d, 0xf0, 0x5c, 0x85, 0xe7, 0x47, 0xad, 0x9b, 0xe3, 0x27, 0xde, 0x40, 0x3b, 0x52, 0xaa,
-	0xeb, 0x0f, 0x73, 0x37, 0xf0, 0x8f, 0xf1, 0xfd, 0xac, 0x5c, 0xe6, 0xfe, 0x37, 0x00, 0x00, 0xff,
-	0xff, 0x19, 0xe6, 0xe4, 0xdc, 0x26, 0x01, 0x00, 0x00,
+var fileDescriptor_p2p_a397304a6711e508 = []byte{
+	// 142 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2c, 0x30, 0x2a, 0xd0,
+	0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x2e, 0x30, 0x2a, 0x90, 0x92, 0x4b, 0xcf, 0xcf, 0x4f,
+	0xcf, 0x49, 0xd5, 0x07, 0x0b, 0x25, 0x95, 0xa6, 0xe9, 0x97, 0x17, 0x25, 0x16, 0x14, 0xa4, 0x16,
+	0x15, 0x43, 0x14, 0x29, 0xc9, 0x72, 0xb1, 0x06, 0xa4, 0xa6, 0x16, 0x15, 0x0b, 0x89, 0x40, 0x19,
+	0x12, 0x8c, 0x0a, 0xcc, 0x1a, 0x9c, 0x41, 0x10, 0x8e, 0x91, 0x33, 0x17, 0xb7, 0x5f, 0x7e, 0x4a,
+	0x6a, 0x70, 0x6a, 0x51, 0x59, 0x66, 0x72, 0xaa, 0x90, 0x09, 0x17, 0x87, 0x7b, 0x6a, 0x09, 0x44,
+	0x83, 0x8c, 0x1e, 0xc4, 0x68, 0x3d, 0x98, 0xd1, 0x7a, 0xc1, 0x25, 0x45, 0x99, 0x79, 0xe9, 0x61,
+	0x89, 0x39, 0xa5, 0xa9, 0x52, 0x5c, 0x7a, 0x20, 0x87, 0x80, 0x55, 0x26, 0xb1, 0x81, 0x55, 0x18,
+	0x03, 0x02, 0x00, 0x00, 0xff, 0xff, 0x90, 0xa1, 0xff, 0xd9, 0x9c, 0x00, 0x00, 0x00,
 }

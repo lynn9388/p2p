@@ -16,17 +16,75 @@
 
 package p2p
 
-import "testing"
+import (
+	"google.golang.org/grpc/connectivity"
+	"testing"
+)
 
-var tests = map[string]Peer{
-	"127.0.0.1:9388":   {Host: "127.0.0.1", Port: 9388},
-	"192.168.1.1:9388": {Host: "192.168.1.1", Port: 9388},
+func TestPeer_GetConnection(t *testing.T) {
+	node := NewNode("localhost", 9388)
+	node.StartServer()
+	defer node.StopServer()
+
+	peer := Peer{Addr: node.Addr}
+	conn, err := peer.GetConnection()
+	if err != nil {
+		t.Error(err)
+	}
+	defer conn.Close()
+
+	if state := conn.GetState(); state != connectivity.Idle {
+		t.Errorf("failed to get connection (Expect IDLE): %v", state)
+	}
 }
 
-func TestPeer_GetAddr(t *testing.T) {
-	for addr, peer := range tests {
-		if peer.GetAddr() != addr {
-			t.Errorf("GetAddr of %v = %v", addr, peer.GetAddr())
-		}
+func TestPeer_Disconnect(t *testing.T) {
+	node := NewNode("localhost", 9388)
+	node.StartServer()
+	defer node.StopServer()
+
+	peer := Peer{Addr: node.Addr}
+
+	if peer.Disconnect() != nil {
+		t.Error("failed to disconnect unconnected peer")
+	}
+
+	conn, err := peer.GetConnection()
+	if err != nil {
+		t.Error(err)
+	}
+	if state := conn.GetState(); state != connectivity.Idle {
+		t.Errorf("failed to get connection (expect IDLE): %v", state)
+	}
+
+	peer.Disconnect()
+	if state := conn.GetState(); state != connectivity.Shutdown {
+		t.Errorf("failed to close connection (expect SHUTDOWN): %v", state)
+	}
+}
+
+func TestPeer_GetPeers(t *testing.T) {
+	node := NewNode("localhost", 9388)
+	node.StartServer()
+	defer node.StopServer()
+
+	nodePeer := Peer{Addr: node.Addr}
+	testPeer := Peer{Addr: "localhost:9488"}
+	peers, err := nodePeer.GetPeers(testPeer.Addr)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(peers) != 0 {
+		t.Errorf("failed to get peers (expect 0): %v", len(peers))
+	}
+
+	node.RemovePeer(testPeer.Addr)
+	node.AddPeers(tests...)
+	peers, err = nodePeer.GetPeers(testPeer.Addr)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(peers) != len(tests) {
+		t.Errorf("failed to get peers (expect %v): %v", len(tests), len(peers))
 	}
 }

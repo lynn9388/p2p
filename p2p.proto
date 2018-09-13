@@ -1,28 +1,14 @@
 syntax = "proto3";
 
+import "google/protobuf/wrappers.proto";
+
 package p2p;
 
-// Peer is the minimum entity that a node can communicate.
-message Peer {
-    string host = 1;
-    int32 port = 2;
-}
-
-// Peers is a wrapper for list of peer
+// Peers is a list of peer's network address
 message Peers {
-    repeated Peer peers = 1;
-}
-
-// PingPong is the valid message of ping.
-message PingPong {
-    enum Message {
-        PING = 0;
-        PONG = 1;
-    }
-    Message message = 1;
+    repeated string Peers = 1;
 }
 
 service NodeService {
-    rpc Ping (PingPong) returns (PingPong);
-    rpc GetPeers (Peer) returns (Peers);
+    rpc GetPeers (google.protobuf.StringValue) returns (Peers);
 }

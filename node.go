@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 
+// Package p2p implements a node in P2P network.
 package p2p
 
 import (
-	"errors"
+	"flag"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"log"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -27,203 +30,154 @@ import (
 	"google.golang.org/grpc"
 )
 
-const maxSleepTime = 5 * time.Second
-const maxConnNum = 20
+var (
+	maxSleepTime time.Duration
+	maxPeerNum   int
+)
 
 // Node is a independent entity in the P2P network.
 type Node struct {
-	self         Peer
-	server       *grpc.Server
-	leaveNetwork chan struct{}
-	peers        map[string]Peer
-	connections  map[string]*grpc.ClientConn
-	mux          sync.RWMutex
-	waiter       sync.WaitGroup
+	Addr   string       // local network address
+	Server *grpc.Server // gRPC server
+
+	Peers map[string]*Peer // known remote nodes
+	Mux   sync.RWMutex     // mutual exclusion lock for peers
+
+	leave  chan struct{}  // leave network signal
+	waiter sync.WaitGroup // wait background goroutines
+}
+
+func init() {
+	if flag.Lookup("test.v") == nil {
+		maxSleepTime = 5 * time.Second
+		maxPeerNum = 20
+	} else {
+		maxSleepTime = 1 * time.Second
+		maxPeerNum = 5
+	}
 }
 
 // NewNode initials a new node with specific host IP and port.
 func NewNode(host string, port int) Node {
 	return Node{
-		self:         Peer{Host: host, Port: int32(port)},
-		server:       grpc.NewServer(),
-		leaveNetwork: make(chan struct{}),
-		peers:        make(map[string]Peer),
-		connections:  make(map[string]*grpc.ClientConn),
-		mux:          sync.RWMutex{},
-		waiter:       sync.WaitGroup{},
+		Addr:   net.JoinHostPort(host, strconv.Itoa(port)),
+		Server: grpc.NewServer(),
+
+		Peers: make(map[string]*Peer),
+		Mux:   sync.RWMutex{},
+
+		leave:  make(chan struct{}),
+		waiter: sync.WaitGroup{},
 	}
 }
 
-// IsSelf checks if the node has same network address with a peer.
-func (n *Node) IsSelf(p *Peer) bool {
-	return n.self.Host == p.Host && n.self.Port == p.Port
+// StartServer starts server to provide services. This must be called after
+// registering any other external service.
+func (n *Node) StartServer() {
+	lis, err := net.Listen("tcp", n.Addr)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	// register internal service
+	RegisterNodeServiceServer(n.Server, n)
+
+	log.Printf("server is listening at: %v", n.Addr)
+	go n.Server.Serve(lis)
 }
 
-// AddPeers adds peers to the node's peer list.
-func (n *Node) AddPeers(ps ...Peer) {
-	n.mux.Lock()
-	defer n.mux.Unlock()
-	for _, p := range ps {
-		if !n.IsSelf(&p) {
-			if _, ok := n.peers[p.GetAddr()]; !ok {
-				n.peers[p.GetAddr()] = p
-				log.Printf("%v add peer: %v", n.self.GetAddr(), p.GetAddr())
+// StopServer closes all connections and stop the server.
+func (n *Node) StopServer() {
+	n.Mux.Lock()
+	for _, p := range n.Peers {
+		p.Disconnect()
+	}
+	n.Mux.Unlock()
+
+	if n.Server != nil {
+		n.Server.Stop()
+		log.Print("server stopped")
+	}
+}
+
+// AddPeers adds peers to the node's peer list if a peer's network address
+// is unknown before.
+func (n *Node) AddPeers(addresses ...string) {
+	n.Mux.Lock()
+	defer n.Mux.Unlock()
+
+	for _, addr := range addresses {
+		if n.Addr != addr {
+			if _, ok := n.Peers[addr]; !ok {
+				n.Peers[addr] = &Peer{Addr: addr}
+				log.Printf("%v adds peer: %v", n.Addr, addr)
 			}
 		}
 	}
 }
 
-// RemovePeer removes a peer from the node's peer list.
-func (n *Node) RemovePeer(p *Peer) {
-	n.disconnectPeer(p)
-	n.mux.Lock()
-	delete(n.peers, p.GetAddr())
-	n.mux.Unlock()
-}
+// RemovePeer removes a peer from the node's peer list. It disconnects the
+// connection relative to the peer before removing.
+func (n *Node) RemovePeer(addr string) error {
+	n.Mux.Lock()
+	defer n.Mux.Unlock()
 
-// HasPeer checks if a peer is in the node's peer list.
-func (n *Node) HasPeer(p *Peer) bool {
-	n.mux.RLock()
-	_, ok := n.peers[p.GetAddr()]
-	n.mux.RUnlock()
-	return ok
+	if p, ok := n.Peers[addr]; ok {
+		if err := p.Disconnect(); err != nil {
+			return err
+		}
+
+		delete(n.Peers, p.Addr)
+		log.Printf("%v removes peer: %v", n.Addr, p.Addr)
+	}
+
+	return nil
 }
 
 // getPeers returns all the peers in the node's peer list.
 func (n *Node) getPeers() []Peer {
 	var ps []Peer
 
-	n.mux.RLock()
-	for _, p := range n.peers {
-		ps = append(ps, p)
+	n.Mux.RLock()
+	for _, p := range n.Peers {
+		ps = append(ps, *p)
 	}
-	n.mux.RUnlock()
+	n.Mux.RUnlock()
 
 	return ps
 }
 
 // getPeersNum returns the number of peers in the node's peer list.
 func (n *Node) getPeersNum() int {
-	n.mux.RLock()
-	defer n.mux.RUnlock()
-	return len(n.peers)
+	n.Mux.RLock()
+	defer n.Mux.RUnlock()
+	return len(n.Peers)
 }
 
-// StartServer starts server to serve node request.
-func (n *Node) StartServer() {
-	lis, err := net.Listen("tcp", n.self.GetAddr())
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-
-	// register internal service
-	RegisterNodeServiceServer(n.server, n)
-
-	log.Printf("server is listening at: %v", n.self.GetAddr())
-	go n.server.Serve(lis)
-}
-
-// StopServer closes all connections and stop the server.
-func (n *Node) StopServer() {
-	n.mux.Lock()
-	defer n.mux.Unlock()
-	for _, conn := range n.connections {
-		conn.Close()
-	}
-
-	if n.server != nil {
-		n.server.Stop()
-		log.Print("server stopped")
-	}
-}
-
-// connectPeer connects a peer if the node hasn't connected to it, or
-// reconnects the peer otherwise.
-func (n *Node) connectPeer(p *Peer) (*grpc.ClientConn, error) {
-	n.disconnectPeer(p)
-	conn, err := grpc.Dial(p.GetAddr(), grpc.WithInsecure())
-	if err != nil {
-		return nil, err
-	}
-
-	n.mux.Lock()
-	n.connections[p.GetAddr()] = conn
-	n.mux.Unlock()
-	return conn, nil
-}
-
-// disconnectPeer disconnects the connection if the node has connected to the
-// peer.
-func (n *Node) disconnectPeer(p *Peer) {
-	n.mux.Lock()
-	defer n.mux.Unlock()
-	conn, ok := n.connections[p.GetAddr()]
-	if ok {
-		conn.Close()
-	}
-}
-
-// GetConnection returns a connection between the node and the peer.
-func (n *Node) GetConnection(p *Peer) (*grpc.ClientConn, error) {
-	n.mux.RLock()
-	conn, ok := n.connections[p.GetAddr()]
-	n.mux.RUnlock()
-	if !ok {
-		var err error
-		conn, err = n.connectPeer(p)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return conn, nil
-}
-
-// discoverPeers requests other neighbor peers from a connected peer.
-func (n *Node) discoverPeers(p *Peer) ([]Peer, error) {
-	var ps []Peer
-
-	conn, err := n.GetConnection(p)
-	if err != nil {
-		return nil, err
-	}
-
-	client := NewNodeServiceClient(conn)
-	peers, err := client.GetPeers(context.Background(), &n.self)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, p := range peers.Peers {
-		ps = append(ps, *p)
-	}
-
-	return ps, nil
-}
-
-// JoinNetwork discovers new peers via bootstraps until have enough peers in
-// peer list.
-func (n *Node) JoinNetwork(bootstraps ...Peer) {
+// JoinNetwork discovers new peers via bootstraps until have enough peers
+// in peer list.
+func (n *Node) JoinNetwork(bootstraps ...string) {
 	n.AddPeers(bootstraps...)
 
 	n.waiter.Add(1)
 	go func() {
 		for {
-			if n.getPeersNum() < maxConnNum {
+			if n.getPeersNum() < maxPeerNum {
 				for _, p := range n.getPeers() {
-					peers, err := n.discoverPeers(&p)
+					peers, err := p.GetPeers(n.Addr)
 					if err != nil {
 						log.Print(err)
 						continue
 					}
 					n.AddPeers(peers...)
-					if n.getPeersNum() > maxConnNum {
+					if n.getPeersNum() > maxPeerNum {
 						break
 					}
 				}
 			}
 
 			select {
-			case <-n.leaveNetwork:
+			case <-n.leave:
 				n.waiter.Done()
 				return
 			case <-time.After(maxSleepTime):
@@ -235,12 +189,12 @@ func (n *Node) JoinNetwork(bootstraps ...Peer) {
 
 // LeaveNetwork stop discovering new peers and disconnect all connections.
 func (n *Node) LeaveNetwork() {
-	n.leaveNetwork <- struct{}{}
+	n.leave <- struct{}{}
 
-	n.mux.Lock()
-	defer n.mux.Unlock()
-	for _, conn := range n.connections {
-		conn.Close()
+	n.Mux.Lock()
+	defer n.Mux.Unlock()
+	for _, p := range n.Peers {
+		p.Disconnect()
 	}
 }
 
@@ -249,23 +203,13 @@ func (n *Node) Wait() {
 	n.waiter.Wait()
 }
 
-// Ping returns pong message when received ping message.
-func (n *Node) Ping(ctx context.Context, ping *PingPong) (*PingPong, error) {
-	if ping.Message != PingPong_PING {
-		return nil, errors.New("invalid ping message: " + ping.Message.String())
-	}
-	return &PingPong{Message: PingPong_PONG}, nil
-}
-
-// GetPeers return a list of peer to client.
-func (n *Node) GetPeers(ctx context.Context, p *Peer) (*Peers, error) {
-	var peers []*Peer
-
-	ps := n.getPeers()
-	for i := range ps {
-		peers = append(peers, &ps[i])
+// GetPeers return a list of known peer to client.
+func (n *Node) GetPeers(ctx context.Context, addr *wrappers.StringValue) (*Peers, error) {
+	var peers []string
+	for _, p := range n.getPeers() {
+		peers = append(peers, p.Addr)
 	}
 
-	n.AddPeers(*p)
+	n.AddPeers(addr.Value)
 	return &Peers{Peers: peers}, nil
 }

@@ -28,7 +28,6 @@ func main() {
 
 	node := p2p.NewNode("localhost", *port)
 	node.StartServer()
-	bootstrap := p2p.Peer{Host: "localhost", Port: 9388}
-	node.JoinNetwork(bootstrap)
+	node.JoinNetwork("localhost:9388")
 	node.Wait()
 }
