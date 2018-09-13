@@ -4,7 +4,7 @@ import "google/protobuf/wrappers.proto";
 
 package p2p;
 
-// Peers is a list of peer's network address
+// Peers is a list of peer's network address.
 message Peers {
     repeated string Peers = 1;
 }

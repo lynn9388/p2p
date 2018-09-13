@@ -18,14 +18,14 @@
 package p2p
 
 import (
+	"context"
 	"flag"
-	"github.com/golang/protobuf/ptypes/wrappers"
-	"log"
 	"net"
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"github.com/dedis/student_18/dgcosi/code/onet/log"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 )
 

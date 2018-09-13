@@ -24,7 +24,7 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-// Peers is a list of peer's network address
+// Peers is a list of peer's network address.
 type Peers struct {
 	Peers                []string `protobuf:"bytes,1,rep,name=Peers,proto3" json:"Peers,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -36,7 +36,7 @@ func (m *Peers) Reset()         { *m = Peers{} }
 func (m *Peers) String() string { return proto.CompactTextString(m) }
 func (*Peers) ProtoMessage()    {}
 func (*Peers) Descriptor() ([]byte, []int) {
-	return fileDescriptor_p2p_a397304a6711e508, []int{0}
+	return fileDescriptor_p2p_f296ebf1110ca790, []int{0}
 }
 func (m *Peers) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Peers.Unmarshal(m, b)
@@ -139,9 +139,9 @@ var _NodeService_serviceDesc = grpc.ServiceDesc{
 	Metadata: "p2p.proto",
 }
 
-func init() { proto.RegisterFile("p2p.proto", fileDescriptor_p2p_a397304a6711e508) }
+func init() { proto.RegisterFile("p2p.proto", fileDescriptor_p2p_f296ebf1110ca790) }
 
-var fileDescriptor_p2p_a397304a6711e508 = []byte{
+var fileDescriptor_p2p_f296ebf1110ca790 = []byte{
 	// 142 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2c, 0x30, 0x2a, 0xd0,
 	0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x2e, 0x30, 0x2a, 0x90, 0x92, 0x4b, 0xcf, 0xcf, 0x4f,
