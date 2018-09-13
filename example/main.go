@@ -27,8 +27,8 @@ func main() {
 	port := flag.Int("port", 9388, "port for server")
 	flag.Parse()
 
-	node := p2p.NewNode("localhost" + strconv.Itoa(*port))
-	node.StartServer()
+	node := p2p.NewNode("localhost:" + strconv.Itoa(*port))
 	node.JoinNetwork("localhost:9388")
+	node.StartServer()
 	node.Wait()
 }
