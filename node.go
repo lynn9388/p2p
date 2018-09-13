@@ -132,6 +132,14 @@ func (n *Node) RemovePeer(addr string) error {
 	return nil
 }
 
+// GetPeer returns a peer in the node's peer list.
+func (n *Node) GetPeer(addr string) (*Peer, bool) {
+	n.Mux.RLock()
+	defer n.Mux.RUnlock()
+	p, ok := n.Peers[addr]
+	return p, ok
+}
+
 // getPeers returns all the peers in the node's peer list.
 func (n *Node) getPeers() []Peer {
 	var ps []Peer
