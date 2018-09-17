@@ -17,76 +17,134 @@
 package p2p
 
 import (
-	"google.golang.org/grpc/connectivity"
+	"strconv"
+	"sync"
 	"testing"
+
+	"google.golang.org/grpc/connectivity"
 )
 
-func TestPeer_GetConnection(t *testing.T) {
-	node := NewNode("localhost:9488")
+var tests = []string{
+	"127.0.0.1:9388",
+	"127.0.0.1:9389",
+}
+
+func TestPeerManager_AddPeers(t *testing.T) {
+	pm := NewPeerManager("localhost:9488")
+	waiter := sync.WaitGroup{}
+
+	for i := 0; i < 10; i++ {
+		waiter.Add(1)
+		go func(port int) {
+			pm.AddPeers("localhost:" + strconv.Itoa(port))
+			waiter.Done()
+		}(i)
+	}
+	waiter.Wait()
+
+	if len(pm.Peers) != 10 {
+		t.Error(len(pm.Peers))
+	}
+}
+
+func TestPeerManager_RemovePeer(t *testing.T) {
+	pm := NewPeerManager("localhost:9488")
+	waiter := sync.WaitGroup{}
+
+	for i := 0; i < 10; i++ {
+		pm.AddPeers("localhost:" + strconv.Itoa(i))
+	}
+
+	for i := 0; i < 5; i++ {
+		waiter.Add(1)
+		go func(port int) {
+			if err := pm.RemovePeer("localhost:" + strconv.Itoa(port)); err != nil {
+				t.Error(err)
+			}
+			waiter.Done()
+		}(i)
+	}
+	waiter.Wait()
+
+	if len(pm.Peers) != 5 {
+		t.Error(len(pm.Peers))
+	}
+}
+
+func TestPeerManager_GetConnection(t *testing.T) {
+	pm := NewPeerManager("localhost:9488")
+
+	node := NewNode(tests[0])
 	node.StartServer()
 	defer node.StopServer()
 
-	peer := Peer{Addr: node.Addr}
-	conn, err := peer.GetConnection()
+	conn, err := pm.GetConnection(tests[0])
+	if err == nil {
+		t.Errorf("get connection to unknown peer without error: %v", tests[0])
+	}
+
+	pm.AddPeers(tests[0])
+	conn, err = pm.GetConnection(tests[0])
 	if err != nil {
 		t.Error(err)
 	}
 	defer conn.Close()
-
 	if state := conn.GetState(); state != connectivity.Idle {
-		t.Errorf("failed to get connection (Expect IDLE): %v", state)
+		t.Errorf("failed to get connection to peer: %v %v(Expect IDLE)", tests[0], state)
 	}
 }
 
-func TestPeer_Disconnect(t *testing.T) {
-	node := NewNode("localhost:9488")
+func TestPeerManager_Disconnect(t *testing.T) {
+	pm := NewPeerManager("localhost:9488")
+
+	node := NewNode(tests[0])
 	node.StartServer()
 	defer node.StopServer()
 
-	peer := Peer{Addr: node.Addr}
-
-	if err := peer.Disconnect(); err != nil {
-		t.Errorf("failed to disconnect unconnected peer: %v", err)
+	if err := pm.Disconnect(tests[0]); err == nil {
+		t.Errorf("disconnect to unknown peer without error: %v", tests[0])
 	}
 
-	conn, err := peer.GetConnection()
+	pm.AddPeers(tests[0])
+	_, err := pm.GetConnection(tests[0])
 	if err != nil {
 		t.Error(err)
 	}
-	if state := conn.GetState(); state != connectivity.Idle {
-		t.Errorf("failed to get connection (expect IDLE): %v", state)
+	if state := pm.Peers[tests[0]].conn.GetState(); state != connectivity.Idle {
+		t.Errorf("failed to get connection to peer: %v %v(expect IDLE)", tests[0], state)
 	}
-
-	if err := peer.Disconnect(); err != nil {
-		t.Errorf("failed to disconnect peer: %v", err)
+	if err := pm.Disconnect(tests[0]); err != nil {
+		t.Errorf("failed to disconnect peer: %v: %v", tests[0], err)
 	}
-	if state := conn.GetState(); state != connectivity.Shutdown {
-		t.Errorf("failed to close connection (expect SHUTDOWN): %v", state)
+	if state := pm.Peers[tests[0]].conn.GetState(); state != connectivity.Shutdown {
+		t.Errorf("failed to disconnect peer: %v %v(expect SHUTDOWN)", tests[0], state)
 	}
 }
 
-func TestPeer_GetPeers(t *testing.T) {
-	node := NewNode("localhost:9488")
+func TestPeerManager_GetNeighbors(t *testing.T) {
+	nodeAddr := "localhost:9488"
+	pm := NewPeerManager("localhost:9588")
+	pm.AddPeers(nodeAddr)
+
+	node := NewNode(nodeAddr)
 	node.StartServer()
 	defer node.StopServer()
 
-	nodePeer := Peer{Addr: node.Addr}
-	testPeer := Peer{Addr: "localhost:9588"}
-	peers, err := nodePeer.GetPeers(testPeer.Addr)
+	peers, err := pm.GetNeighbors(nodeAddr)
 	if err != nil {
 		t.Error(err)
 	}
 	if len(peers) != 0 {
-		t.Errorf("failed to get peers (expect 0): %v", len(peers))
+		t.Errorf("failed to get peers from peer: %v %v(expect 0)", nodeAddr, len(peers))
 	}
 
-	node.RemovePeer(testPeer.Addr)
+	node.RemovePeer(pm.self)
 	node.AddPeers(tests...)
-	peers, err = nodePeer.GetPeers(testPeer.Addr)
+	peers, err = pm.GetNeighbors(nodeAddr)
 	if err != nil {
 		t.Error(err)
 	}
 	if len(peers) != len(tests) {
-		t.Errorf("failed to get peers (expect %v): %v", len(tests), len(peers))
+		t.Errorf("failed to get peers from peer: %v %v(expect %v)", nodeAddr, len(peers), len(tests))
 	}
 }

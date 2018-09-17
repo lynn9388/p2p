@@ -24,9 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/golang/protobuf/ptypes/wrappers"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -39,11 +38,9 @@ var (
 
 // Node is a independent entity in the P2P network.
 type Node struct {
-	Addr   string       // local network address
-	Server *grpc.Server // gRPC server
-
-	Peers map[string]*Peer // known remote nodes
-	Mux   sync.RWMutex     // mutual exclusion lock for peers
+	Addr        string       // network address
+	Server      *grpc.Server // gRPC server
+	PeerManager              // peer manager
 
 	leave  chan struct{}  // leave network signal
 	waiter sync.WaitGroup // wait background goroutines
@@ -65,11 +62,9 @@ func init() {
 // NewNode initials a new node with specific network address.
 func NewNode(addr string) Node {
 	return Node{
-		Addr:   addr,
-		Server: grpc.NewServer(),
-
-		Peers: make(map[string]*Peer),
-		Mux:   sync.RWMutex{},
+		Addr:        addr,
+		Server:      grpc.NewServer(),
+		PeerManager: *NewPeerManager(addr),
 
 		leave:  make(chan struct{}),
 		waiter: sync.WaitGroup{},
@@ -104,68 +99,6 @@ func (n *Node) StopServer() {
 	}
 }
 
-// AddPeers adds peers to the node's peer list if a peer's network address
-// is unknown before.
-func (n *Node) AddPeers(addresses ...string) {
-	n.Mux.Lock()
-	defer n.Mux.Unlock()
-
-	for _, addr := range addresses {
-		if n.Addr != addr {
-			if _, ok := n.Peers[addr]; !ok {
-				n.Peers[addr] = &Peer{Addr: addr}
-				log.Debugf("%v adds peer: %v", n.Addr, addr)
-			}
-		}
-	}
-}
-
-// RemovePeer removes a peer from the node's peer list. It disconnects the
-// connection relative to the peer before removing.
-func (n *Node) RemovePeer(addr string) error {
-	n.Mux.Lock()
-	defer n.Mux.Unlock()
-
-	if p, ok := n.Peers[addr]; ok {
-		if err := p.Disconnect(); err != nil {
-			return err
-		}
-
-		delete(n.Peers, p.Addr)
-		log.Debugf("%v removes peer: %v", n.Addr, p.Addr)
-	}
-
-	return nil
-}
-
-// GetPeer returns a peer in the node's peer list.
-func (n *Node) GetPeer(addr string) (*Peer, bool) {
-	n.Mux.RLock()
-	defer n.Mux.RUnlock()
-	p, ok := n.Peers[addr]
-	return p, ok
-}
-
-// getPeers returns all the peers in the node's peer list.
-func (n *Node) getPeers() []Peer {
-	var ps []Peer
-
-	n.Mux.RLock()
-	for _, p := range n.Peers {
-		ps = append(ps, *p)
-	}
-	n.Mux.RUnlock()
-
-	return ps
-}
-
-// getPeersNum returns the number of peers in the node's peer list.
-func (n *Node) getPeersNum() int {
-	n.Mux.RLock()
-	defer n.Mux.RUnlock()
-	return len(n.Peers)
-}
-
 // JoinNetwork discovers new peers via bootstraps until have enough peers
 // in peer list.
 func (n *Node) JoinNetwork(bootstraps ...string) {
@@ -175,11 +108,8 @@ func (n *Node) JoinNetwork(bootstraps ...string) {
 	go func() {
 		for {
 			if n.getPeersNum() < maxPeerNum {
-				n.Mux.RLock()
-				peers := n.Peers
-				n.Mux.RUnlock()
-				for _, p := range peers {
-					peers, err := p.GetPeers(n.Addr)
+				for _, p := range n.getPeers() {
+					peers, err := n.GetNeighbors(p.Addr)
 					if err != nil {
 						log.Error(err)
 						continue
@@ -213,7 +143,7 @@ func (n *Node) LeaveNetwork() {
 
 	n.Mux.Lock()
 	for _, p := range n.Peers {
-		if err := p.Disconnect(); err != nil {
+		if err := n.disconnect(p.Addr); err != nil {
 			log.Error(err)
 		}
 	}

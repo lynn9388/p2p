@@ -17,58 +17,11 @@
 package p2p
 
 import (
-	"google.golang.org/grpc/connectivity"
-	"strconv"
-	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/connectivity"
 )
-
-var tests = []string{
-	"127.0.0.1:9388",
-	"127.0.0.1:9389",
-}
-
-func TestNode_AddPeers(t *testing.T) {
-	node := NewNode("localhost:9488")
-	waiter := sync.WaitGroup{}
-
-	for i := 0; i < 10; i++ {
-		waiter.Add(1)
-		go func(port int) {
-			node.AddPeers("localhost:" + strconv.Itoa(port))
-			waiter.Done()
-		}(i)
-	}
-	waiter.Wait()
-
-	if len(node.Peers) != 10 {
-		t.Error(len(node.Peers))
-	}
-}
-
-func TestNode_RemovePeer(t *testing.T) {
-	node := NewNode("localhost:9488")
-
-	for i := 0; i < 10; i++ {
-		node.AddPeers("localhost:" + strconv.Itoa(i))
-	}
-
-	waiter := sync.WaitGroup{}
-	for i := 0; i < 5; i++ {
-		waiter.Add(1)
-		go func(port int) {
-			if err := node.RemovePeer("localhost:" + strconv.Itoa(port)); err != nil {
-				t.Error(err)
-			}
-			waiter.Done()
-		}(i)
-	}
-	waiter.Wait()
-	if len(node.Peers) != 5 {
-		t.Error(len(node.Peers))
-	}
-}
 
 func TestNode_JoinNetwork(t *testing.T) {
 	for _, addr := range tests {
