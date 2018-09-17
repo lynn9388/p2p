@@ -109,7 +109,7 @@ func (n *Node) JoinNetwork(bootstraps ...string) {
 		for {
 			if n.getPeersNum() < maxPeerNum {
 				for _, p := range n.getPeers() {
-					peers, err := n.GetNeighbors(p.Addr)
+					peers, err := n.RequestNeighbors(p.Addr)
 					if err != nil {
 						log.Error(err)
 						continue
@@ -133,7 +133,7 @@ func (n *Node) JoinNetwork(bootstraps ...string) {
 	}()
 }
 
-// LeaveNetwork stop discovering new peers and disconnect all connections.
+// LeaveNetwork stops discovering new peers and disconnect all connections.
 func (n *Node) LeaveNetwork() {
 	// request to stop discovering new peers
 	n.leave <- struct{}{}
@@ -155,8 +155,8 @@ func (n *Node) Wait() {
 	n.waiter.Wait()
 }
 
-// GetPeers return a list of known peer to client.
-func (n *Node) GetPeers(ctx context.Context, addr *wrappers.StringValue) (*Peers, error) {
+// GetNeighbors returns the peers known by a node.
+func (n *Node) GetNeighbors(ctx context.Context, addr *wrappers.StringValue) (*Peers, error) {
 	var peers []string
 	for _, p := range n.getPeers() {
 		peers = append(peers, p.Addr)

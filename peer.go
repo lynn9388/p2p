@@ -156,15 +156,15 @@ func (pm *PeerManager) Disconnect(addr string) error {
 	return pm.disconnect(addr)
 }
 
-// GetNeighbors requests other neighbor peers from a peer.
-func (pm *PeerManager) GetNeighbors(addr string) ([]string, error) {
+// RequestNeighbors requests other neighbor peers from a peer.
+func (pm *PeerManager) RequestNeighbors(addr string) ([]string, error) {
 	conn, err := pm.GetConnection(addr)
 	if err != nil {
 		return nil, err
 	}
 
 	client := NewNodeServiceClient(conn)
-	peers, err := client.GetPeers(context.Background(), &wrappers.StringValue{Value: pm.self})
+	peers, err := client.GetNeighbors(context.Background(), &wrappers.StringValue{Value: pm.self})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get neighbors of peer: %v: %v", addr, err)
 	}

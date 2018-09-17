@@ -9,6 +9,8 @@ message Peers {
     repeated string Peers = 1;
 }
 
+// NodeService is the basic services provided by a node.
 service NodeService {
-    rpc GetPeers (google.protobuf.StringValue) returns (Peers);
+    // GetNeighbors returns the peers known by a node.
+    rpc GetNeighbors (google.protobuf.StringValue) returns (Peers);
 }

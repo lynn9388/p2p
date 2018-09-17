@@ -121,7 +121,7 @@ func TestPeerManager_Disconnect(t *testing.T) {
 	}
 }
 
-func TestPeerManager_GetNeighbors(t *testing.T) {
+func TestPeerManager_RequestNeighbors(t *testing.T) {
 	nodeAddr := "localhost:9488"
 	pm := NewPeerManager("localhost:9588")
 	pm.AddPeers(nodeAddr)
@@ -130,7 +130,7 @@ func TestPeerManager_GetNeighbors(t *testing.T) {
 	node.StartServer()
 	defer node.StopServer()
 
-	peers, err := pm.GetNeighbors(nodeAddr)
+	peers, err := pm.RequestNeighbors(nodeAddr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -140,7 +140,7 @@ func TestPeerManager_GetNeighbors(t *testing.T) {
 
 	node.RemovePeer(pm.self)
 	node.AddPeers(tests...)
-	peers, err = pm.GetNeighbors(nodeAddr)
+	peers, err = pm.RequestNeighbors(nodeAddr)
 	if err != nil {
 		t.Error(err)
 	}

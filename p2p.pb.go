@@ -36,7 +36,7 @@ func (m *Peers) Reset()         { *m = Peers{} }
 func (m *Peers) String() string { return proto.CompactTextString(m) }
 func (*Peers) ProtoMessage()    {}
 func (*Peers) Descriptor() ([]byte, []int) {
-	return fileDescriptor_p2p_f296ebf1110ca790, []int{0}
+	return fileDescriptor_p2p_d605d3e47861ef4b, []int{0}
 }
 func (m *Peers) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Peers.Unmarshal(m, b)
@@ -79,7 +79,8 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type NodeServiceClient interface {
-	GetPeers(ctx context.Context, in *wrappers.StringValue, opts ...grpc.CallOption) (*Peers, error)
+	// GetNeighbors returns the peers known by a node.
+	GetNeighbors(ctx context.Context, in *wrappers.StringValue, opts ...grpc.CallOption) (*Peers, error)
 }
 
 type nodeServiceClient struct {
@@ -90,9 +91,9 @@ func NewNodeServiceClient(cc *grpc.ClientConn) NodeServiceClient {
 	return &nodeServiceClient{cc}
 }
 
-func (c *nodeServiceClient) GetPeers(ctx context.Context, in *wrappers.StringValue, opts ...grpc.CallOption) (*Peers, error) {
+func (c *nodeServiceClient) GetNeighbors(ctx context.Context, in *wrappers.StringValue, opts ...grpc.CallOption) (*Peers, error) {
 	out := new(Peers)
-	err := c.cc.Invoke(ctx, "/p2p.NodeService/GetPeers", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/p2p.NodeService/GetNeighbors", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -101,27 +102,28 @@ func (c *nodeServiceClient) GetPeers(ctx context.Context, in *wrappers.StringVal
 
 // NodeServiceServer is the server API for NodeService service.
 type NodeServiceServer interface {
-	GetPeers(context.Context, *wrappers.StringValue) (*Peers, error)
+	// GetNeighbors returns the peers known by a node.
+	GetNeighbors(context.Context, *wrappers.StringValue) (*Peers, error)
 }
 
 func RegisterNodeServiceServer(s *grpc.Server, srv NodeServiceServer) {
 	s.RegisterService(&_NodeService_serviceDesc, srv)
 }
 
-func _NodeService_GetPeers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _NodeService_GetNeighbors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(wrappers.StringValue)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(NodeServiceServer).GetPeers(ctx, in)
+		return srv.(NodeServiceServer).GetNeighbors(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/p2p.NodeService/GetPeers",
+		FullMethod: "/p2p.NodeService/GetNeighbors",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).GetPeers(ctx, req.(*wrappers.StringValue))
+		return srv.(NodeServiceServer).GetNeighbors(ctx, req.(*wrappers.StringValue))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -131,25 +133,26 @@ var _NodeService_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*NodeServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetPeers",
-			Handler:    _NodeService_GetPeers_Handler,
+			MethodName: "GetNeighbors",
+			Handler:    _NodeService_GetNeighbors_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "p2p.proto",
 }
 
-func init() { proto.RegisterFile("p2p.proto", fileDescriptor_p2p_f296ebf1110ca790) }
+func init() { proto.RegisterFile("p2p.proto", fileDescriptor_p2p_d605d3e47861ef4b) }
 
-var fileDescriptor_p2p_f296ebf1110ca790 = []byte{
-	// 142 bytes of a gzipped FileDescriptorProto
+var fileDescriptor_p2p_d605d3e47861ef4b = []byte{
+	// 150 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2c, 0x30, 0x2a, 0xd0,
 	0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x2e, 0x30, 0x2a, 0x90, 0x92, 0x4b, 0xcf, 0xcf, 0x4f,
 	0xcf, 0x49, 0xd5, 0x07, 0x0b, 0x25, 0x95, 0xa6, 0xe9, 0x97, 0x17, 0x25, 0x16, 0x14, 0xa4, 0x16,
 	0x15, 0x43, 0x14, 0x29, 0xc9, 0x72, 0xb1, 0x06, 0xa4, 0xa6, 0x16, 0x15, 0x0b, 0x89, 0x40, 0x19,
-	0x12, 0x8c, 0x0a, 0xcc, 0x1a, 0x9c, 0x41, 0x10, 0x8e, 0x91, 0x33, 0x17, 0xb7, 0x5f, 0x7e, 0x4a,
-	0x6a, 0x70, 0x6a, 0x51, 0x59, 0x66, 0x72, 0xaa, 0x90, 0x09, 0x17, 0x87, 0x7b, 0x6a, 0x09, 0x44,
-	0x83, 0x8c, 0x1e, 0xc4, 0x68, 0x3d, 0x98, 0xd1, 0x7a, 0xc1, 0x25, 0x45, 0x99, 0x79, 0xe9, 0x61,
-	0x89, 0x39, 0xa5, 0xa9, 0x52, 0x5c, 0x7a, 0x20, 0x87, 0x80, 0x55, 0x26, 0xb1, 0x81, 0x55, 0x18,
-	0x03, 0x02, 0x00, 0x00, 0xff, 0xff, 0x90, 0xa1, 0xff, 0xd9, 0x9c, 0x00, 0x00, 0x00,
+	0x12, 0x8c, 0x0a, 0xcc, 0x1a, 0x9c, 0x41, 0x10, 0x8e, 0x91, 0x3b, 0x17, 0xb7, 0x5f, 0x7e, 0x4a,
+	0x6a, 0x70, 0x6a, 0x51, 0x59, 0x66, 0x72, 0xaa, 0x90, 0x05, 0x17, 0x8f, 0x7b, 0x6a, 0x89, 0x5f,
+	0x6a, 0x66, 0x7a, 0x46, 0x52, 0x7e, 0x51, 0xb1, 0x90, 0x8c, 0x1e, 0xc4, 0x78, 0x3d, 0x98, 0xf1,
+	0x7a, 0xc1, 0x25, 0x45, 0x99, 0x79, 0xe9, 0x61, 0x89, 0x39, 0xa5, 0xa9, 0x52, 0x5c, 0x7a, 0x20,
+	0xc7, 0x80, 0x0d, 0x4a, 0x62, 0x03, 0xab, 0x30, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff, 0x59, 0x24,
+	0xe1, 0xf7, 0xa0, 0x00, 0x00, 0x00,
 }
