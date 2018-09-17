@@ -10,7 +10,7 @@ A simple P2P (peer-to-peer) network implementation.
 ### Features
 
 1. Peer discovery and auto management.
-2. Scalability of services.
+1. Scalability of services.
 
 ### Network
 
@@ -39,7 +39,7 @@ The neighbor "nodes" are looked as "peers" for a node. A node will management th
 ```text
                         gRPC
                           |
-                          v     +----+
+                          v      +----+
                 +----connection->+peer|
                 |                +----+
                 |
