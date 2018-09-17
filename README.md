@@ -5,6 +5,57 @@
 
 A simple P2P (peer-to-peer) network implementation.
 
+## Introduction
+
+### Features
+
+1. Peer discovery and auto management.
+2. Scalability of services.
+
+### Network
+
+In the P2P network, each node will choose some nodes as their neighbors.
+
+```text
+             +------+
+    +------->+ node +<------+
+    |        +------+       |
+    |                       |
+    v                       v
++---+--+                 +--+---+
+| node |                 | node |
++---+--+                 +--+---+
+    ^                       ^
+    |                       |
+    |        +------+       |
+    +------->+ node +<------+
+             +------+
+```
+
+### Node & Peer
+
+The neighbor "nodes" are looked as "peers" for a node. A node will management the connections for neighbor peers and provide some services for other nodes. We use [gRPC](https://grpc.io/) for communication between the node and neighbor peers.
+
+```text
+                        gRPC
+                          |
+                          v     +----+
+                +----connection->+peer|
+                |                +----+
+                |
+                |
+                |
+            +---+--+             +----+
+Service---> | node +-connection->+peer|
+            +---+--+             +----+
+                |
+                |
+                |
+                |                +----+
+                +----connection->+peer|
+                                 +----+
+```
+
 ## Install
 
 Fist, use `go get` to install the latest version of the library:
@@ -21,7 +72,7 @@ import "github.com/lynn9388/p2p"
 
 ## Example
 
-The code below shows how to create a new node.
+The code below shows how to create and launch a new node.
 
 ```go
 func main() {
