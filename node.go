@@ -29,13 +29,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-var (
-	log *zap.SugaredLogger
-
-	maxSleepTime time.Duration
-	maxPeerNum   int
-)
-
 // Node is a independent entity in the P2P network.
 type Node struct {
 	Addr        string       // network address
@@ -46,16 +39,23 @@ type Node struct {
 	waiter sync.WaitGroup // wait background goroutines
 }
 
+var (
+	log *zap.SugaredLogger // default logger
+
+	maxSleepTime time.Duration // sleep time between discover neighbor peers
+	maxPeerNum   int           // max neighbor peers' number
+)
+
 func init() {
 	logger, _ := zap.NewDevelopment()
 	log = logger.Sugar()
 
-	if flag.Lookup("test.v") == nil {
-		maxSleepTime = 5 * time.Second
-		maxPeerNum = 20
-	} else {
+	if flag.Lookup("test.v") != nil { // go test
 		maxSleepTime = 1 * time.Second
 		maxPeerNum = 5
+	} else {
+		maxSleepTime = 5 * time.Second
+		maxPeerNum = 20
 	}
 }
 
@@ -99,8 +99,8 @@ func (n *Node) StopServer() {
 	}
 }
 
-// JoinNetwork discovers new peers via bootstraps until have enough peers
-// in peer list.
+// JoinNetwork discovers new peers via bootstraps until there are enough
+// peers in peer list.
 func (n *Node) JoinNetwork(bootstraps ...string) {
 	n.AddPeers(bootstraps...)
 
