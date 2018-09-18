@@ -122,31 +122,3 @@ func TestPeerManager_Disconnect(t *testing.T) {
 		t.Errorf("failed to disconnect peer: %v %v(expect SHUTDOWN)", tests[0], state)
 	}
 }
-
-func TestPeerManager_RequestNeighbors(t *testing.T) {
-	nodeAddr := "localhost:9488"
-	pm := NewPeerManager("localhost:9588")
-	pm.AddPeers(nodeAddr)
-
-	node := NewNode(nodeAddr)
-	node.StartServer()
-	defer node.StopServer()
-
-	peers, err := pm.RequestNeighbors(nodeAddr)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(peers) != 0 {
-		t.Errorf("failed to get peers from peer: %v %v(expect 0)", nodeAddr, len(peers))
-	}
-
-	node.RemovePeer(pm.self)
-	node.AddPeers(tests...)
-	peers, err = pm.RequestNeighbors(nodeAddr)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(peers) != len(tests) {
-		t.Errorf("failed to get peers from peer: %v %v(expect %v)", nodeAddr, len(peers), len(tests))
-	}
-}

@@ -177,6 +177,21 @@ func (n *Node) GetNeighbors(ctx context.Context, addr *wrappers.StringValue) (*P
 	return &Peers{Peers: peers}, nil
 }
 
+// RequestNeighbors requests other neighbor peers from a peer.
+func (n *Node) RequestNeighbors(addr string) ([]string, error) {
+	conn, err := n.GetConnection(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	client := NewNodeServiceClient(conn)
+	peers, err := client.GetNeighbors(context.Background(), &wrappers.StringValue{Value: n.Addr})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get neighbors of peer: %v: %v", addr, err)
+	}
+	return peers.Peers, nil
+}
+
 // Broadcast receives message and broadcasts it to neighbor peers. The node
 // will not broadcast messages with same content, so the messages should append
 // extra info to identify messages.

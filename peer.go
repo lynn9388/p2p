@@ -17,11 +17,9 @@
 package p2p
 
 import (
-	"context"
 	"fmt"
 	"sync"
 
-	"github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 )
@@ -154,19 +152,4 @@ func (pm *PeerManager) Disconnect(addr string) error {
 	defer pm.Mux.Unlock()
 
 	return pm.disconnect(addr)
-}
-
-// RequestNeighbors requests other neighbor peers from a peer.
-func (pm *PeerManager) RequestNeighbors(addr string) ([]string, error) {
-	conn, err := pm.GetConnection(addr)
-	if err != nil {
-		return nil, err
-	}
-
-	client := NewNodeServiceClient(conn)
-	peers, err := client.GetNeighbors(context.Background(), &wrappers.StringValue{Value: pm.self})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get neighbors of peer: %v: %v", addr, err)
-	}
-	return peers.Peers, nil
 }

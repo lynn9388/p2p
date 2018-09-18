@@ -68,6 +68,33 @@ func TestNode_LeaveNetwork(t *testing.T) {
 	}
 }
 
+func TestNode_RequestNeighbors(t *testing.T) {
+	server := NewNode("localhost:9488")
+	server.StartServer()
+	defer server.StopServer()
+
+	client := NewNode("localhost:9588")
+
+	client.AddPeers(server.Addr)
+	peers, err := client.RequestNeighbors(server.Addr)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(peers) != 0 {
+		t.Errorf("failed to get neighbor peers: %v(expect 0)", len(peers))
+	}
+
+	server.RemovePeer(client.Addr)
+	server.AddPeers(tests...)
+	peers, err = client.RequestNeighbors(server.Addr)
+	if err != nil {
+		t.Error(err)
+	}
+	if len(peers) != len(tests) {
+		t.Errorf("failed to get neighbor peers: %v(expect %v)", len(peers), len(tests))
+	}
+}
+
 func TestNode_RequestBroadcast(t *testing.T) {
 	var nodes []*Node
 	for _, addr := range tests {
@@ -93,13 +120,13 @@ func TestNode_RequestBroadcast(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	for _, node := range nodes {
-		lentgh := 0
+		length := 0
 		node.messages.Range(func(key, value interface{}) bool {
-			lentgh++
+			length++
 			return true
 		})
-		if lentgh != 1 {
-			t.Errorf("failed to broadcast message: %v(expecte 1)", lentgh)
+		if length != 1 {
+			t.Errorf("failed to broadcast message: %v(expecte 1)", length)
 		}
 	}
 }
