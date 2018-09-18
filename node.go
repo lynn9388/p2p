@@ -51,13 +51,15 @@ type Node struct {
 var (
 	log *zap.SugaredLogger // default logger
 
-	maxSleepTime time.Duration // sleep time between discover neighbor peers
-	maxPeerNum   int           // max neighbor peers' number
+	maxRequestTime time.Duration // timeout for request rpc
+	maxSleepTime   time.Duration // sleep time between discover neighbor peers
+	maxPeerNum     int           // max neighbor peers' number
 )
 
 func init() {
 	logger, _ := zap.NewDevelopment()
 	log = logger.Sugar()
+	maxRequestTime = 5 * time.Second
 
 	if flag.Lookup("test.v") != nil { // go test
 		maxSleepTime = 1 * time.Second
@@ -185,7 +187,10 @@ func (n *Node) RequestNeighbors(addr string) ([]string, error) {
 	}
 
 	client := NewNodeServiceClient(conn)
-	peers, err := client.GetNeighbors(context.Background(), &wrappers.StringValue{Value: n.Addr})
+
+	ctx, cancel := context.WithTimeout(context.Background(), maxRequestTime)
+	defer cancel()
+	peers, err := client.GetNeighbors(ctx, &wrappers.StringValue{Value: n.Addr})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get neighbors of peer: %v: %v", addr, err)
 	}
@@ -233,7 +238,10 @@ func (n *Node) RequestBroadcast(addr string, msg *any.Any) error {
 	n.messages.Store(hash(msg.Value), time.Now())
 
 	client := NewNodeServiceClient(conn)
-	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("address", n.Addr))
+
+	ctx, cancel := context.WithTimeout(context.Background(), maxRequestTime)
+	defer cancel()
+	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("address", n.Addr))
 	_, err = client.Broadcast(ctx, msg)
 	if err != nil {
 		return fmt.Errorf("failed to broadcast message to peer: %v: %v", addr, err)

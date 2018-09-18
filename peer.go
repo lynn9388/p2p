@@ -130,7 +130,7 @@ func (pm *PeerManager) GetConnection(addr string) (*grpc.ClientConn, error) {
 	return p.conn, nil
 }
 
-// disconnect closes the connection to the peer. This function is not thread-safe,
+// disconnect closes the connection to the peer. This method is not thread-safe,
 func (pm *PeerManager) disconnect(addr string) error {
 	p, ok := pm.Peers[addr]
 	if !ok {
