@@ -11,6 +11,7 @@ A simple P2P (peer-to-peer) network implementation.
 
 1. Peer discovery and auto management.
 1. Scalability of services.
+1. Broadcast message (flood protocol).
 
 ### Network
 

@@ -1,6 +1,8 @@
 syntax = "proto3";
 
 import "google/protobuf/wrappers.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
 
 package p2p;
 
@@ -13,4 +15,6 @@ message Peers {
 service NodeService {
     // GetNeighbors returns the peers known by a node.
     rpc GetNeighbors (google.protobuf.StringValue) returns (Peers);
+    // Broadcast receives message and broadcasts it to neighbor peers.
+    rpc Broadcast (google.protobuf.Any) returns (google.protobuf.Empty);
 }

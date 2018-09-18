@@ -19,14 +19,21 @@ package p2p
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"flag"
+	"fmt"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/ptypes/any"
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 // Node is a independent entity in the P2P network.
@@ -37,6 +44,8 @@ type Node struct {
 
 	leave  chan struct{}  // leave network signal
 	waiter sync.WaitGroup // wait background goroutines
+
+	messages sync.Map // hash and time of recent received messages
 }
 
 var (
@@ -68,6 +77,8 @@ func NewNode(addr string) Node {
 
 		leave:  make(chan struct{}),
 		waiter: sync.WaitGroup{},
+
+		messages: sync.Map{},
 	}
 }
 
@@ -164,4 +175,61 @@ func (n *Node) GetNeighbors(ctx context.Context, addr *wrappers.StringValue) (*P
 
 	n.AddPeers(addr.Value)
 	return &Peers{Peers: peers}, nil
+}
+
+// Broadcast receives message and broadcasts it to neighbor peers. The node
+// will not broadcast messages with same content, so the messages should append
+// extra info to identify messages.
+func (n *Node) Broadcast(ctx context.Context, msg *any.Any) (*empty.Empty, error) {
+	key := hash(msg.Value)
+	if _, ok := n.messages.LoadOrStore(key, time.Now()); ok {
+		log.Debugf("%v received duplicate message: %v", n.Addr, key)
+		return &empty.Empty{}, nil
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return &empty.Empty{}, errors.New("failed to get metadata from context")
+	}
+	addresses := md.Get("address")
+	if len(addresses) != 1 {
+		return &empty.Empty{}, errors.New("failed to get address of message sender from context")
+	}
+
+	log.Debugf("%v received message from peer: %v", n.Addr, addresses[0])
+
+	for _, p := range n.getPeers() {
+		if p.Addr != addresses[0] {
+			if err := n.RequestBroadcast(p.Addr, msg); err != nil {
+				log.Error(err)
+			}
+		}
+	}
+	return &empty.Empty{}, nil
+}
+
+// RequestBroadcast requests to broadcast a message to entire network.
+func (n *Node) RequestBroadcast(addr string, msg *any.Any) error {
+	conn, err := n.GetConnection(addr)
+	if err != nil {
+		return err
+	}
+
+	n.messages.Store(hash(msg.Value), time.Now())
+
+	client := NewNodeServiceClient(conn)
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("address", n.Addr))
+	_, err = client.Broadcast(ctx, msg)
+	if err != nil {
+		return fmt.Errorf("failed to broadcast message to peer: %v: %v", addr, err)
+	}
+
+	log.Debugf("%v sends message to peer: %v", n.Addr, addr)
+	return nil
+}
+
+// hash returns the hash value of data.
+func hash(data []byte) string {
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
 }

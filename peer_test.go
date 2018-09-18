@@ -27,6 +27,8 @@ import (
 var tests = []string{
 	"127.0.0.1:9388",
 	"127.0.0.1:9389",
+	"127.0.0.1:9390",
+	"127.0.0.1:9391",
 }
 
 func TestPeerManager_AddPeers(t *testing.T) {

@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/ptypes"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc/connectivity"
 )
 
@@ -62,6 +64,42 @@ func TestNode_LeaveNetwork(t *testing.T) {
 	for _, p := range node.getPeers() {
 		if state := p.conn.GetState(); state != connectivity.Shutdown {
 			t.Errorf("failed to leave network: %v ", state)
+		}
+	}
+}
+
+func TestNode_RequestBroadcast(t *testing.T) {
+	var nodes []*Node
+	for _, addr := range tests {
+		node := NewNode(addr)
+		node.StartServer()
+		defer node.StopServer()
+		nodes = append(nodes, &node)
+	}
+
+	nodes[0].AddPeers(nodes[1].Addr, nodes[2].Addr)
+	nodes[1].AddPeers(nodes[0].Addr, nodes[3].Addr)
+	nodes[2].AddPeers(nodes[0].Addr, nodes[3].Addr)
+	nodes[3].AddPeers(nodes[1].Addr, nodes[2].Addr)
+
+	msg, err := ptypes.MarshalAny(&wrappers.StringValue{Value: "Hello"})
+	if err != nil {
+		t.Error(err)
+	}
+
+	if err = nodes[0].RequestBroadcast(nodes[1].Addr, msg); err != nil {
+		t.Error(err)
+	}
+	time.Sleep(1 * time.Second)
+
+	for _, node := range nodes {
+		lentgh := 0
+		node.messages.Range(func(key, value interface{}) bool {
+			lentgh++
+			return true
+		})
+		if lentgh != 1 {
+			t.Errorf("failed to broadcast message: %v(expecte 1)", lentgh)
 		}
 	}
 }
