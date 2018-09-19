@@ -40,7 +40,7 @@ import (
 type Node struct {
 	Addr        string       // network address
 	Server      *grpc.Server // gRPC server
-	PeerManager              // peer manager
+	peerManager *PeerManager // peer manager
 
 	leave  chan struct{}  // leave network signal
 	waiter sync.WaitGroup // wait background goroutines
@@ -75,7 +75,7 @@ func NewNode(addr string) Node {
 	return Node{
 		Addr:        addr,
 		Server:      grpc.NewServer(),
-		PeerManager: *NewPeerManager(addr),
+		peerManager: NewPeerManager(addr),
 
 		leave:  make(chan struct{}),
 		waiter: sync.WaitGroup{},
@@ -115,20 +115,20 @@ func (n *Node) StopServer() {
 // JoinNetwork discovers new peers via bootstraps until there are enough
 // peers in peer list.
 func (n *Node) JoinNetwork(bootstraps ...string) {
-	n.AddPeers(bootstraps...)
+	n.peerManager.AddPeers(bootstraps...)
 
 	n.waiter.Add(1)
 	go func() {
 		for {
-			if n.getPeersNum() < maxPeerNum {
-				for _, p := range n.getPeers() {
+			if n.peerManager.getPeersNum() < maxPeerNum {
+				for _, p := range n.peerManager.getPeers() {
 					peers, err := n.RequestNeighbors(p.Addr)
 					if err != nil {
 						log.Error(err)
 						continue
 					}
-					n.AddPeers(peers...)
-					if n.getPeersNum() > maxPeerNum {
+					n.peerManager.AddPeers(peers...)
+					if n.peerManager.getPeersNum() > maxPeerNum {
 						break
 					}
 				}
@@ -154,13 +154,13 @@ func (n *Node) LeaveNetwork() {
 	// wait for discovering new peers stopped
 	<-n.leave
 
-	n.Mux.Lock()
-	for _, p := range n.Peers {
-		if err := n.disconnect(p.Addr); err != nil {
+	n.peerManager.Mux.Lock()
+	for _, p := range n.peerManager.Peers {
+		if err := n.peerManager.disconnect(p.Addr); err != nil {
 			log.Error(err)
 		}
 	}
-	n.Mux.Unlock()
+	n.peerManager.Mux.Unlock()
 }
 
 // Wait keeps node running in background.
@@ -171,17 +171,17 @@ func (n *Node) Wait() {
 // GetNeighbors returns the peers known by a node.
 func (n *Node) GetNeighbors(ctx context.Context, addr *wrappers.StringValue) (*Peers, error) {
 	var peers []string
-	for _, p := range n.getPeers() {
+	for _, p := range n.peerManager.getPeers() {
 		peers = append(peers, p.Addr)
 	}
 
-	n.AddPeers(addr.Value)
+	n.peerManager.AddPeers(addr.Value)
 	return &Peers{Peers: peers}, nil
 }
 
 // RequestNeighbors requests other neighbor peers from a peer.
 func (n *Node) RequestNeighbors(addr string) ([]string, error) {
-	conn, err := n.GetConnection(addr)
+	conn, err := n.peerManager.GetConnection(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,7 @@ func (n *Node) Broadcast(ctx context.Context, msg *any.Any) (*empty.Empty, error
 
 	log.Debugf("%v received message from peer: %v", n.Addr, addresses[0])
 
-	for _, p := range n.getPeers() {
+	for _, p := range n.peerManager.getPeers() {
 		if p.Addr != addresses[0] {
 			if err := n.RequestBroadcast(p.Addr, msg); err != nil {
 				log.Error(err)
@@ -230,7 +230,7 @@ func (n *Node) Broadcast(ctx context.Context, msg *any.Any) (*empty.Empty, error
 
 // RequestBroadcast requests to broadcast a message to entire network.
 func (n *Node) RequestBroadcast(addr string, msg *any.Any) error {
-	conn, err := n.GetConnection(addr)
+	conn, err := n.peerManager.GetConnection(addr)
 	if err != nil {
 		return err
 	}

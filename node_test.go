@@ -40,8 +40,8 @@ func TestNode_JoinNetwork(t *testing.T) {
 	node.StartServer()
 	defer node.StopServer()
 	time.Sleep(5 * time.Second)
-	if node.getPeersNum() != len(tests) {
-		t.Errorf("failed to join the network (expect %v): %v", len(tests), node.getPeersNum())
+	if node.peerManager.getPeersNum() != len(tests) {
+		t.Errorf("failed to join the network (expect %v): %v", len(tests), node.peerManager.getPeersNum())
 	}
 }
 
@@ -61,7 +61,7 @@ func TestNode_LeaveNetwork(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	node.LeaveNetwork()
-	for _, p := range node.getPeers() {
+	for _, p := range node.peerManager.getPeers() {
 		if state := p.conn.GetState(); state != connectivity.Shutdown {
 			t.Errorf("failed to leave network: %v ", state)
 		}
@@ -75,7 +75,7 @@ func TestNode_RequestNeighbors(t *testing.T) {
 
 	client := NewNode("localhost:9588")
 
-	client.AddPeers(server.Addr)
+	client.peerManager.AddPeers(server.Addr)
 	peers, err := client.RequestNeighbors(server.Addr)
 	if err != nil {
 		t.Error(err)
@@ -84,8 +84,8 @@ func TestNode_RequestNeighbors(t *testing.T) {
 		t.Errorf("failed to get neighbor peers: %v(expect 0)", len(peers))
 	}
 
-	server.RemovePeer(client.Addr)
-	server.AddPeers(tests...)
+	server.peerManager.RemovePeer(client.Addr)
+	server.peerManager.AddPeers(tests...)
 	peers, err = client.RequestNeighbors(server.Addr)
 	if err != nil {
 		t.Error(err)
@@ -104,10 +104,10 @@ func TestNode_RequestBroadcast(t *testing.T) {
 		nodes = append(nodes, &node)
 	}
 
-	nodes[0].AddPeers(nodes[1].Addr, nodes[2].Addr)
-	nodes[1].AddPeers(nodes[0].Addr, nodes[3].Addr)
-	nodes[2].AddPeers(nodes[0].Addr, nodes[3].Addr)
-	nodes[3].AddPeers(nodes[1].Addr, nodes[2].Addr)
+	nodes[0].peerManager.AddPeers(nodes[1].Addr, nodes[2].Addr)
+	nodes[1].peerManager.AddPeers(nodes[0].Addr, nodes[3].Addr)
+	nodes[2].peerManager.AddPeers(nodes[0].Addr, nodes[3].Addr)
+	nodes[3].peerManager.AddPeers(nodes[1].Addr, nodes[2].Addr)
 
 	msg, err := ptypes.MarshalAny(&wrappers.StringValue{Value: "Hello"})
 	if err != nil {
