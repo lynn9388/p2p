@@ -79,23 +79,37 @@ func (pm *PeerManager) RemovePeer(addr string) error {
 	return nil
 }
 
-// getPeers returns all the peers in the peer manager.
-func (pm *PeerManager) getPeers() []Peer {
+// getPeers returns all the peers' addresses in the peer manager.
+func (pm *PeerManager) getPeers() []string {
 	pm.Mux.RLock()
 	defer pm.Mux.RUnlock()
 
-	var ps []Peer
+	var addresses []string
 	for _, p := range pm.Peers {
-		ps = append(ps, *p)
+		addresses = append(addresses, p.Addr)
 	}
-	return ps
+	return addresses
 }
 
 // getPeersNum returns the number of peers in the peer manager.
 func (pm *PeerManager) getPeersNum() int {
 	pm.Mux.RLock()
 	defer pm.Mux.RUnlock()
+
 	return len(pm.Peers)
+}
+
+// getPeerState returns the state of connection to a peer
+func (pm *PeerManager) getPeerState(addr string) connectivity.State {
+	pm.Mux.RLock()
+	defer pm.Mux.RUnlock()
+
+	p, ok := pm.Peers[addr]
+	if !ok || p.conn == nil {
+		return connectivity.State(-1)
+	}
+
+	return p.conn.GetState()
 }
 
 // GetConnection returns a connection to a peer if the peer is known.
@@ -113,7 +127,7 @@ func (pm *PeerManager) GetConnection(addr string) (*grpc.ClientConn, error) {
 		state = p.conn.GetState()
 
 		if state != connectivity.Idle && state != connectivity.Ready {
-			if err := pm.Disconnect(addr); err != nil {
+			if err := pm.disconnect(addr); err != nil {
 				return nil, err
 			}
 		}
@@ -152,4 +166,16 @@ func (pm *PeerManager) Disconnect(addr string) error {
 	defer pm.Mux.Unlock()
 
 	return pm.disconnect(addr)
+}
+
+// Disconnect closes all the connections to known peers.
+func (pm *PeerManager) DisconnectAll() {
+	pm.Mux.Lock()
+	defer pm.Mux.Unlock()
+
+	for _, p := range pm.Peers {
+		if err := pm.disconnect(p.Addr); err != nil {
+			log.Error(err)
+		}
+	}
 }

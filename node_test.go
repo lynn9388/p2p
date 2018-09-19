@@ -25,18 +25,18 @@ import (
 	"google.golang.org/grpc/connectivity"
 )
 
-func TestNode_JoinNetwork(t *testing.T) {
+func TestNode_DiscoverPeers(t *testing.T) {
 	for _, addr := range tests {
 		node := NewNode(addr)
-		node.JoinNetwork(tests[0])
-		defer node.LeaveNetwork()
+		node.DiscoverPeers(tests[0])
+		defer node.StopDiscoverPeers()
 		node.StartServer()
 		defer node.StopServer()
 	}
 
 	node := NewNode("localhost:9488")
-	node.JoinNetwork(tests[0])
-	defer node.LeaveNetwork()
+	node.DiscoverPeers(tests[0])
+	defer node.StopDiscoverPeers()
 	node.StartServer()
 	defer node.StopServer()
 	time.Sleep(5 * time.Second)
@@ -45,24 +45,24 @@ func TestNode_JoinNetwork(t *testing.T) {
 	}
 }
 
-func TestNode_LeaveNetwork(t *testing.T) {
+func TestNode_StopDiscoverPeers(t *testing.T) {
 	for _, addr := range tests {
 		node := NewNode(addr)
-		node.JoinNetwork(tests[0])
-		defer node.LeaveNetwork()
+		node.DiscoverPeers(tests[0])
+		defer node.StopDiscoverPeers()
 		node.StartServer()
 		defer node.StopServer()
 	}
 
 	node := NewNode("localhost:9488")
-	node.JoinNetwork(tests[0])
+	node.DiscoverPeers(tests[0])
 	node.StartServer()
 	defer node.StopServer()
 	time.Sleep(5 * time.Second)
 
-	node.LeaveNetwork()
-	for _, p := range node.peerManager.getPeers() {
-		if state := p.conn.GetState(); state != connectivity.Shutdown {
+	node.StopDiscoverPeers()
+	for _, addr := range node.peerManager.getPeers() {
+		if state := node.peerManager.getPeerState(addr); state != connectivity.Shutdown {
 			t.Errorf("failed to leave network: %v ", state)
 		}
 	}

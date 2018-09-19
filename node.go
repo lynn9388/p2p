@@ -42,8 +42,9 @@ type Node struct {
 	Server      *grpc.Server // gRPC server
 	peerManager *PeerManager // peer manager
 
-	leave  chan struct{}  // leave network signal
-	waiter sync.WaitGroup // wait background goroutines
+	stopDiscover    chan struct{}  // stop discover neighbor peers signal
+	discoverStopped chan struct{}  // discover neighbor peers stopped signal
+	waiter          sync.WaitGroup // wait background goroutines
 
 	messages sync.Map // hash and time of recent received messages
 }
@@ -62,7 +63,7 @@ func init() {
 	maxRequestTime = 5 * time.Second
 
 	if flag.Lookup("test.v") != nil { // go test
-		maxSleepTime = 1 * time.Second
+		maxSleepTime = 2 * time.Second
 		maxPeerNum = 5
 	} else {
 		maxSleepTime = 5 * time.Second
@@ -77,8 +78,9 @@ func NewNode(addr string) Node {
 		Server:      grpc.NewServer(),
 		peerManager: NewPeerManager(addr),
 
-		leave:  make(chan struct{}),
-		waiter: sync.WaitGroup{},
+		stopDiscover:    make(chan struct{}),
+		discoverStopped: make(chan struct{}),
+		waiter:          sync.WaitGroup{},
 
 		messages: sync.Map{},
 	}
@@ -112,32 +114,32 @@ func (n *Node) StopServer() {
 	}
 }
 
-// JoinNetwork discovers new peers via bootstraps until there are enough
+// DiscoverPeers discovers new peers via bootstraps until there are enough
 // peers in peer list.
-func (n *Node) JoinNetwork(bootstraps ...string) {
+func (n *Node) DiscoverPeers(bootstraps ...string) {
 	n.peerManager.AddPeers(bootstraps...)
 
 	n.waiter.Add(1)
 	go func() {
 		for {
 			if n.peerManager.getPeersNum() < maxPeerNum {
-				for _, p := range n.peerManager.getPeers() {
-					peers, err := n.RequestNeighbors(p.Addr)
+				for _, addr := range n.peerManager.getPeers() {
+					peers, err := n.RequestNeighbors(addr)
 					if err != nil {
 						log.Error(err)
 						continue
 					}
 					n.peerManager.AddPeers(peers...)
-					if n.peerManager.getPeersNum() > maxPeerNum {
+					if n.peerManager.getPeersNum() >= maxPeerNum {
 						break
 					}
 				}
 			}
 
 			select {
-			case <-n.leave:
+			case <-n.stopDiscover:
 				n.waiter.Done()
-				n.leave <- struct{}{}
+				n.discoverStopped <- struct{}{}
 				return
 			case <-time.After(maxSleepTime):
 				continue
@@ -146,21 +148,15 @@ func (n *Node) JoinNetwork(bootstraps ...string) {
 	}()
 }
 
-// LeaveNetwork stops discovering new peers and disconnect all connections.
-func (n *Node) LeaveNetwork() {
+// StopDiscoverPeers stops discovering new peers and disconnect all connections.
+func (n *Node) StopDiscoverPeers() {
 	// request to stop discovering new peers
-	n.leave <- struct{}{}
+	n.stopDiscover <- struct{}{}
 
 	// wait for discovering new peers stopped
-	<-n.leave
+	<-n.discoverStopped
 
-	n.peerManager.Mux.Lock()
-	for _, p := range n.peerManager.Peers {
-		if err := n.peerManager.disconnect(p.Addr); err != nil {
-			log.Error(err)
-		}
-	}
-	n.peerManager.Mux.Unlock()
+	n.peerManager.DisconnectAll()
 }
 
 // Wait keeps node running in background.
@@ -170,13 +166,9 @@ func (n *Node) Wait() {
 
 // GetNeighbors returns the peers known by a node.
 func (n *Node) GetNeighbors(ctx context.Context, addr *wrappers.StringValue) (*Peers, error) {
-	var peers []string
-	for _, p := range n.peerManager.getPeers() {
-		peers = append(peers, p.Addr)
-	}
-
+	addresses := n.peerManager.getPeers()
 	n.peerManager.AddPeers(addr.Value)
-	return &Peers{Peers: peers}, nil
+	return &Peers{Peers: addresses}, nil
 }
 
 // RequestNeighbors requests other neighbor peers from a peer.
@@ -218,9 +210,9 @@ func (n *Node) Broadcast(ctx context.Context, msg *any.Any) (*empty.Empty, error
 
 	log.Debugf("%v received message from peer: %v", n.Addr, addresses[0])
 
-	for _, p := range n.peerManager.getPeers() {
-		if p.Addr != addresses[0] {
-			if err := n.RequestBroadcast(p.Addr, msg); err != nil {
+	for _, addr := range n.peerManager.getPeers() {
+		if addr != addresses[0] {
+			if err := n.RequestBroadcast(addr, msg); err != nil {
 				log.Error(err)
 			}
 		}
