@@ -24,8 +24,8 @@ import (
 	"google.golang.org/grpc/connectivity"
 )
 
-// Peer is the the remote node that a local node can connect to.
-type Peer struct {
+// peer is the the remote node that a local node can connect to.
+type peer struct {
 	Addr string
 	conn *grpc.ClientConn
 }
@@ -33,7 +33,7 @@ type Peer struct {
 // PeerManager manages the peers thant a local node known.
 type PeerManager struct {
 	self  string           // address of node
-	Peers map[string]*Peer // known remote peers
+	Peers map[string]*peer // known remote peers
 	Mux   sync.RWMutex     // mutual exclusion lock for peers
 }
 
@@ -41,7 +41,7 @@ type PeerManager struct {
 func NewPeerManager(self string) *PeerManager {
 	return &PeerManager{
 		self:  self,
-		Peers: make(map[string]*Peer),
+		Peers: make(map[string]*peer),
 		Mux:   sync.RWMutex{},
 	}
 }
@@ -55,7 +55,7 @@ func (pm *PeerManager) AddPeers(addresses ...string) {
 	for _, addr := range addresses {
 		if addr != pm.self {
 			if _, ok := pm.Peers[addr]; !ok {
-				pm.Peers[addr] = &Peer{Addr: addr}
+				pm.Peers[addr] = &peer{Addr: addr}
 				log.Debugf("%v adds peer: %v", pm.self, addr)
 			}
 		}
