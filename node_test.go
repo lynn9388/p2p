@@ -28,14 +28,14 @@ import (
 func TestNode_DiscoverPeers(t *testing.T) {
 	for _, addr := range tests {
 		node := NewNode(addr)
-		node.DiscoverPeers(tests[0])
+		node.StartDiscoverPeers(tests[0])
 		defer node.StopDiscoverPeers()
 		node.StartServer()
 		defer node.StopServer()
 	}
 
 	node := NewNode("localhost:9488")
-	node.DiscoverPeers(tests[0])
+	node.StartDiscoverPeers(tests[0])
 	defer node.StopDiscoverPeers()
 	node.StartServer()
 	defer node.StopServer()
@@ -48,14 +48,14 @@ func TestNode_DiscoverPeers(t *testing.T) {
 func TestNode_StopDiscoverPeers(t *testing.T) {
 	for _, addr := range tests {
 		node := NewNode(addr)
-		node.DiscoverPeers(tests[0])
+		node.StartDiscoverPeers(tests[0])
 		defer node.StopDiscoverPeers()
 		node.StartServer()
 		defer node.StopServer()
 	}
 
 	node := NewNode("localhost:9488")
-	node.DiscoverPeers(tests[0])
+	node.StartDiscoverPeers(tests[0])
 	node.StartServer()
 	defer node.StopServer()
 	time.Sleep(5 * time.Second)

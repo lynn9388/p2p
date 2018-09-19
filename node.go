@@ -114,9 +114,8 @@ func (n *Node) StopServer() {
 	}
 }
 
-// DiscoverPeers discovers new peers via bootstraps until there are enough
-// peers in peer list.
-func (n *Node) DiscoverPeers(bootstraps ...string) {
+// StartDiscoverPeers starts discovering new peers via bootstraps.
+func (n *Node) StartDiscoverPeers(bootstraps ...string) {
 	n.peerManager.AddPeers(bootstraps...)
 
 	n.waiter.Add(1)
