@@ -101,7 +101,7 @@ func TestNode_RequestBroadcast(t *testing.T) {
 		node := NewNode(addr)
 		node.StartServer()
 		defer node.StopServer()
-		nodes = append(nodes, &node)
+		nodes = append(nodes, node)
 	}
 
 	nodes[0].peerManager.AddPeers(nodes[1].Addr, nodes[2].Addr)

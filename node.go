@@ -72,8 +72,8 @@ func init() {
 }
 
 // NewNode initials a new node with specific network address.
-func NewNode(addr string) Node {
-	return Node{
+func NewNode(addr string) *Node {
+	return &Node{
 		Addr:        addr,
 		Server:      grpc.NewServer(),
 		peerManager: NewPeerManager(addr),
