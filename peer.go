@@ -79,8 +79,8 @@ func (pm *PeerManager) RemovePeer(addr string) error {
 	return nil
 }
 
-// getPeers returns all the peers' addresses in the peer manager.
-func (pm *PeerManager) getPeers() []string {
+// GetPeers returns all the peers' addresses in the peer manager.
+func (pm *PeerManager) GetPeers() []string {
 	pm.Mux.RLock()
 	defer pm.Mux.RUnlock()
 
@@ -91,16 +91,16 @@ func (pm *PeerManager) getPeers() []string {
 	return addresses
 }
 
-// getPeersNum returns the number of peers in the peer manager.
-func (pm *PeerManager) getPeersNum() int {
+// GetPeersNum returns the number of peers in the peer manager.
+func (pm *PeerManager) GetPeersNum() int {
 	pm.Mux.RLock()
 	defer pm.Mux.RUnlock()
 
 	return len(pm.Peers)
 }
 
-// getPeerState returns the state of connection to a peer
-func (pm *PeerManager) getPeerState(addr string) connectivity.State {
+// GetPeerState returns the state of connection to a peer
+func (pm *PeerManager) GetPeerState(addr string) connectivity.State {
 	pm.Mux.RLock()
 	defer pm.Mux.RUnlock()
 

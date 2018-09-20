@@ -40,7 +40,7 @@ import (
 type Node struct {
 	Addr        string       // network address
 	Server      *grpc.Server // gRPC server
-	peerManager *PeerManager // peer manager
+	PeerManager *PeerManager // peer manager
 
 	stopDiscover    chan struct{}  // stop discover neighbor peers signal
 	discoverStopped chan struct{}  // discover neighbor peers stopped signal
@@ -76,7 +76,7 @@ func NewNode(addr string) *Node {
 	return &Node{
 		Addr:        addr,
 		Server:      grpc.NewServer(),
-		peerManager: NewPeerManager(addr),
+		PeerManager: NewPeerManager(addr),
 
 		stopDiscover:    make(chan struct{}),
 		discoverStopped: make(chan struct{}),
@@ -116,20 +116,20 @@ func (n *Node) StopServer() {
 
 // StartDiscoverPeers starts discovering new peers via bootstraps.
 func (n *Node) StartDiscoverPeers(bootstraps ...string) {
-	n.peerManager.AddPeers(bootstraps...)
+	n.PeerManager.AddPeers(bootstraps...)
 
 	n.waiter.Add(1)
 	go func() {
 		for {
-			if n.peerManager.getPeersNum() < maxPeerNum {
-				for _, addr := range n.peerManager.getPeers() {
+			if n.PeerManager.GetPeersNum() < maxPeerNum {
+				for _, addr := range n.PeerManager.GetPeers() {
 					peers, err := n.RequestNeighbors(addr)
 					if err != nil {
 						log.Error(err)
 						continue
 					}
-					n.peerManager.AddPeers(peers...)
-					if n.peerManager.getPeersNum() >= maxPeerNum {
+					n.PeerManager.AddPeers(peers...)
+					if n.PeerManager.GetPeersNum() >= maxPeerNum {
 						break
 					}
 				}
@@ -155,7 +155,7 @@ func (n *Node) StopDiscoverPeers() {
 	// wait for discovering new peers stopped
 	<-n.discoverStopped
 
-	n.peerManager.DisconnectAll()
+	n.PeerManager.DisconnectAll()
 }
 
 // Wait keeps node running in background.
@@ -165,14 +165,14 @@ func (n *Node) Wait() {
 
 // GetNeighbors returns the peers known by a node.
 func (n *Node) GetNeighbors(ctx context.Context, addr *wrappers.StringValue) (*Peers, error) {
-	addresses := n.peerManager.getPeers()
-	n.peerManager.AddPeers(addr.Value)
+	addresses := n.PeerManager.GetPeers()
+	n.PeerManager.AddPeers(addr.Value)
 	return &Peers{Peers: addresses}, nil
 }
 
 // RequestNeighbors requests other neighbor peers from a peer.
 func (n *Node) RequestNeighbors(addr string) ([]string, error) {
-	conn, err := n.peerManager.GetConnection(addr)
+	conn, err := n.PeerManager.GetConnection(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func (n *Node) Broadcast(ctx context.Context, msg *any.Any) (*empty.Empty, error
 
 	log.Debugf("%v received message from peer: %v", n.Addr, addresses[0])
 
-	for _, addr := range n.peerManager.getPeers() {
+	for _, addr := range n.PeerManager.GetPeers() {
 		if addr != addresses[0] {
 			if err := n.RequestBroadcast(addr, msg); err != nil {
 				log.Error(err)
@@ -221,7 +221,7 @@ func (n *Node) Broadcast(ctx context.Context, msg *any.Any) (*empty.Empty, error
 
 // RequestBroadcast requests to broadcast a message to entire network.
 func (n *Node) RequestBroadcast(addr string, msg *any.Any) error {
-	conn, err := n.peerManager.GetConnection(addr)
+	conn, err := n.PeerManager.GetConnection(addr)
 	if err != nil {
 		return err
 	}
