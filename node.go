@@ -38,9 +38,10 @@ import (
 
 // Node is a independent entity in the P2P network.
 type Node struct {
-	Addr        string       // network address
-	Server      *grpc.Server // gRPC server
-	PeerManager *PeerManager // peer manager
+	Addr           string          // network address
+	Server         *grpc.Server    // gRPC server
+	PeerManager    *PeerManager    // peer manager
+	MessageManager *MessageManager // message manager
 
 	stopDiscover    chan struct{}  // stop discover neighbor peers signal
 	discoverStopped chan struct{}  // discover neighbor peers stopped signal
@@ -74,9 +75,10 @@ func init() {
 // NewNode initials a new node with specific network address.
 func NewNode(addr string) *Node {
 	return &Node{
-		Addr:        addr,
-		Server:      grpc.NewServer(),
-		PeerManager: NewPeerManager(addr),
+		Addr:           addr,
+		Server:         grpc.NewServer(),
+		PeerManager:    NewPeerManager(addr),
+		MessageManager: NewMessageManager(),
 
 		stopDiscover:    make(chan struct{}),
 		discoverStopped: make(chan struct{}),
@@ -101,6 +103,7 @@ func (n *Node) StartServer() {
 
 	// register internal service
 	RegisterNodeServiceServer(n.Server, n)
+	RegisterMessageServiceServer(n.Server, n.MessageManager)
 
 	log.Infof("server is listening at: %v", n.Addr)
 	go n.Server.Serve(lis)

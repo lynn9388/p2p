@@ -38,7 +38,7 @@ func (m *Peers) Reset()         { *m = Peers{} }
 func (m *Peers) String() string { return proto.CompactTextString(m) }
 func (*Peers) ProtoMessage()    {}
 func (*Peers) Descriptor() ([]byte, []int) {
-	return fileDescriptor_p2p_d23688a00e028368, []int{0}
+	return fileDescriptor_p2p_39e483f84f474102, []int{0}
 }
 func (m *Peers) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Peers.Unmarshal(m, b)
@@ -81,7 +81,7 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type NodeServiceClient interface {
-	// GetNeighbors returns the peers known by a node.
+	// GetNeighbors returns the peers known by a node
 	GetNeighbors(ctx context.Context, in *wrappers.StringValue, opts ...grpc.CallOption) (*Peers, error)
 	// Broadcast receives message and broadcasts it to neighbor peers.
 	Broadcast(ctx context.Context, in *any.Any, opts ...grpc.CallOption) (*empty.Empty, error)
@@ -115,7 +115,7 @@ func (c *nodeServiceClient) Broadcast(ctx context.Context, in *any.Any, opts ...
 
 // NodeServiceServer is the server API for NodeService service.
 type NodeServiceServer interface {
-	// GetNeighbors returns the peers known by a node.
+	// GetNeighbors returns the peers known by a node
 	GetNeighbors(context.Context, *wrappers.StringValue) (*Peers, error)
 	// Broadcast receives message and broadcasts it to neighbor peers.
 	Broadcast(context.Context, *any.Any) (*empty.Empty, error)
@@ -178,10 +178,76 @@ var _NodeService_serviceDesc = grpc.ServiceDesc{
 	Metadata: "p2p.proto",
 }
 
-func init() { proto.RegisterFile("p2p.proto", fileDescriptor_p2p_d23688a00e028368) }
+// MessageServiceClient is the client API for MessageService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+type MessageServiceClient interface {
+	// ReceiveMessage receives message from a peer.
+	ReceiveMessage(ctx context.Context, in *any.Any, opts ...grpc.CallOption) (*any.Any, error)
+}
 
-var fileDescriptor_p2p_d23688a00e028368 = []byte{
-	// 195 bytes of a gzipped FileDescriptorProto
+type messageServiceClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewMessageServiceClient(cc *grpc.ClientConn) MessageServiceClient {
+	return &messageServiceClient{cc}
+}
+
+func (c *messageServiceClient) ReceiveMessage(ctx context.Context, in *any.Any, opts ...grpc.CallOption) (*any.Any, error) {
+	out := new(any.Any)
+	err := c.cc.Invoke(ctx, "/p2p.MessageService/ReceiveMessage", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// MessageServiceServer is the server API for MessageService service.
+type MessageServiceServer interface {
+	// ReceiveMessage receives message from a peer.
+	ReceiveMessage(context.Context, *any.Any) (*any.Any, error)
+}
+
+func RegisterMessageServiceServer(s *grpc.Server, srv MessageServiceServer) {
+	s.RegisterService(&_MessageService_serviceDesc, srv)
+}
+
+func _MessageService_ReceiveMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(any.Any)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessageServiceServer).ReceiveMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/p2p.MessageService/ReceiveMessage",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessageServiceServer).ReceiveMessage(ctx, req.(*any.Any))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _MessageService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "p2p.MessageService",
+	HandlerType: (*MessageServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ReceiveMessage",
+			Handler:    _MessageService_ReceiveMessage_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "p2p.proto",
+}
+
+func init() { proto.RegisterFile("p2p.proto", fileDescriptor_p2p_39e483f84f474102) }
+
+var fileDescriptor_p2p_39e483f84f474102 = []byte{
+	// 224 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2c, 0x30, 0x2a, 0xd0,
 	0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x2e, 0x30, 0x2a, 0x90, 0x92, 0x4b, 0xcf, 0xcf, 0x4f,
 	0xcf, 0x49, 0xd5, 0x07, 0x0b, 0x25, 0x95, 0xa6, 0xe9, 0x97, 0x17, 0x25, 0x16, 0x14, 0xa4, 0x16,
@@ -193,6 +259,7 @@ var fileDescriptor_p2p_d23688a00e028368 = []byte{
 	0x0f, 0x66, 0xb8, 0x5e, 0x70, 0x49, 0x51, 0x66, 0x5e, 0x7a, 0x58, 0x62, 0x4e, 0x69, 0xaa, 0x14,
 	0x97, 0x1e, 0xc8, 0x17, 0x10, 0xf3, 0x2d, 0xb9, 0x38, 0x9d, 0x8a, 0xf2, 0x13, 0x53, 0x92, 0x13,
 	0x8b, 0x4b, 0x84, 0x44, 0x30, 0xb4, 0x39, 0xe6, 0x55, 0x4a, 0x89, 0x61, 0x88, 0xba, 0x82, 0x5c,
-	0x9a, 0xc4, 0x06, 0xe6, 0x1b, 0x03, 0x02, 0x00, 0x00, 0xff, 0xff, 0x31, 0xd7, 0xb6, 0xe9, 0x14,
-	0x01, 0x00, 0x00,
+	0x6a, 0xe4, 0xc7, 0xc5, 0xe7, 0x9b, 0x5a, 0x5c, 0x9c, 0x98, 0x0e, 0x77, 0x86, 0x0d, 0x17, 0x5f,
+	0x50, 0x6a, 0x72, 0x6a, 0x66, 0x59, 0x2a, 0x54, 0x02, 0x87, 0x89, 0x58, 0x45, 0x93, 0xd8, 0xc0,
+	0x3c, 0x63, 0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0xec, 0x60, 0x55, 0xd3, 0x64, 0x01, 0x00, 0x00,
 }
