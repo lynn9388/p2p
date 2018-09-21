@@ -17,24 +17,42 @@
 package p2p
 
 import (
+	"context"
+	"flag"
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 )
 
 // peer is the the remote node that a local node can connect to.
 type peer struct {
-	Addr string
-	conn *grpc.ClientConn
+	Addr string           // network address
+	conn *grpc.ClientConn // client connection
 }
 
-// PeerManager manages the peers thant a local node known.
+// PeerManager manages the peers that a local node known.
 type PeerManager struct {
 	self  string           // address of node
 	Peers map[string]*peer // known remote peers
 	Mux   sync.RWMutex     // mutual exclusion lock for peers
+
+	stopDiscover    chan struct{}  // stop discover neighbor peers signal
+	discoverStopped chan struct{}  // discover neighbor peers stopped signal
+	waiter          sync.WaitGroup // wait background goroutines
+}
+
+var maxPeerNum int // max neighbor peers' number
+
+func init() {
+	if flag.Lookup("test.v") != nil { // go test
+		maxPeerNum = 5
+	} else {
+		maxPeerNum = 20
+	}
 }
 
 // NewPeerManager returns a new peer manager with its own network address.
@@ -43,6 +61,10 @@ func NewPeerManager(self string) *PeerManager {
 		self:  self,
 		Peers: make(map[string]*peer),
 		Mux:   sync.RWMutex{},
+
+		stopDiscover:    make(chan struct{}),
+		discoverStopped: make(chan struct{}),
+		waiter:          sync.WaitGroup{},
 	}
 }
 
@@ -119,7 +141,7 @@ func (pm *PeerManager) GetConnection(addr string) (*grpc.ClientConn, error) {
 
 	p, ok := pm.Peers[addr]
 	if !ok {
-		return nil, fmt.Errorf("failed to get connection: unknown peer: %v", addr)
+		return nil, fmt.Errorf("%v failed to get connection: unknown peer: %v", pm.self, addr)
 	}
 
 	var state connectivity.State
@@ -148,12 +170,12 @@ func (pm *PeerManager) GetConnection(addr string) (*grpc.ClientConn, error) {
 func (pm *PeerManager) disconnect(addr string) error {
 	p, ok := pm.Peers[addr]
 	if !ok {
-		return fmt.Errorf("failed to disconnect: unknown peer: %v", addr)
+		return fmt.Errorf("%v failed to disconnect: unknown peer: %v", pm.self, addr)
 	}
 
 	if p.conn != nil {
 		if err := p.conn.Close(); err != nil {
-			return fmt.Errorf("failed to disconnect: %v", err)
+			return fmt.Errorf("%v failed to disconnect: %v", pm.self, err)
 		}
 		log.Debugf("%v disconnected to peer: %v", pm.self, addr)
 	}
@@ -178,4 +200,79 @@ func (pm *PeerManager) DisconnectAll() {
 			log.Error(err)
 		}
 	}
+}
+
+// discoverPeers discovers new peers from another peer, and add new peers
+// into known peers list.
+func (pm *PeerManager) discoverPeers(addr string) {
+	conn, err := pm.GetConnection(addr)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	client := NewPeerServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	peers, err := client.GetNeighbors(ctx, &wrappers.StringValue{Value: pm.self})
+	if err != nil {
+		log.Errorf("%v failed to get neighbors of peer: %v: %v", pm.self, addr, err)
+		return
+	}
+
+	pm.AddPeers(peers.Peers...)
+}
+
+// StartDiscoverPeers starts discovering new peers via bootstraps.
+func (pm *PeerManager) StartDiscoverPeers(bootstraps ...string) {
+	pm.AddPeers(bootstraps...)
+
+	pm.waiter.Add(1)
+	go func() {
+		for {
+			if pm.GetPeersNum() < maxPeerNum {
+				for _, addr := range pm.GetPeers() {
+					pm.discoverPeers(addr)
+					if pm.GetPeersNum() >= maxPeerNum {
+						break
+					}
+				}
+			}
+
+			select {
+			case <-pm.stopDiscover:
+				pm.waiter.Done()
+				pm.discoverStopped <- struct{}{}
+				return
+			case <-time.After(maxSleepTime):
+				continue
+			}
+		}
+	}()
+}
+
+// StopDiscoverPeers stops discovering new peers and disconnect all connections.
+func (pm *PeerManager) StopDiscoverPeers() {
+	// request to stop discovering new peers
+	pm.stopDiscover <- struct{}{}
+
+	// wait for discovering new peers stopped
+	<-pm.discoverStopped
+
+	pm.DisconnectAll()
+}
+
+// Wait keeps the peer manager running in background.
+func (pm *PeerManager) Wait() {
+	pm.waiter.Wait()
+}
+
+// GetNeighbors returns the already known neighbor peers, and add the
+// requester into the known peers list if it's not known before.
+func (pm *PeerManager) GetNeighbors(ctx context.Context, addr *wrappers.StringValue) (*Peers, error) {
+	addresses := pm.GetPeers()
+	pm.AddPeers(addr.Value)
+	return &Peers{Peers: addresses}, nil
 }

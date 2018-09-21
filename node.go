@@ -30,7 +30,6 @@ import (
 
 	"github.com/golang/protobuf/ptypes/any"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/golang/protobuf/ptypes/wrappers"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -43,10 +42,6 @@ type Node struct {
 	PeerManager    *PeerManager    // peer manager
 	MessageManager *MessageManager // message manager
 
-	stopDiscover    chan struct{}  // stop discover neighbor peers signal
-	discoverStopped chan struct{}  // discover neighbor peers stopped signal
-	waiter          sync.WaitGroup // wait background goroutines
-
 	messages sync.Map // hash and time of recent received messages
 }
 
@@ -55,7 +50,6 @@ var (
 
 	maxRequestTime time.Duration // timeout for request rpc
 	maxSleepTime   time.Duration // sleep time between discover neighbor peers
-	maxPeerNum     int           // max neighbor peers' number
 )
 
 func init() {
@@ -65,10 +59,8 @@ func init() {
 
 	if flag.Lookup("test.v") != nil { // go test
 		maxSleepTime = 2 * time.Second
-		maxPeerNum = 5
 	} else {
 		maxSleepTime = 5 * time.Second
-		maxPeerNum = 20
 	}
 }
 
@@ -79,10 +71,6 @@ func NewNode(addr string) *Node {
 		Server:         grpc.NewServer(),
 		PeerManager:    NewPeerManager(addr),
 		MessageManager: NewMessageManager(),
-
-		stopDiscover:    make(chan struct{}),
-		discoverStopped: make(chan struct{}),
-		waiter:          sync.WaitGroup{},
 
 		messages: sync.Map{},
 	}
@@ -103,6 +91,7 @@ func (n *Node) StartServer() {
 
 	// register internal service
 	RegisterNodeServiceServer(n.Server, n)
+	RegisterPeerServiceServer(n.Server, n.PeerManager)
 	RegisterMessageServiceServer(n.Server, n.MessageManager)
 
 	log.Infof("server is listening at: %v", n.Addr)
@@ -115,80 +104,6 @@ func (n *Node) StopServer() {
 		n.Server.Stop()
 		log.Infof("server stopped: %v", n.Addr)
 	}
-}
-
-// StartDiscoverPeers starts discovering new peers via bootstraps.
-func (n *Node) StartDiscoverPeers(bootstraps ...string) {
-	n.PeerManager.AddPeers(bootstraps...)
-
-	n.waiter.Add(1)
-	go func() {
-		for {
-			if n.PeerManager.GetPeersNum() < maxPeerNum {
-				for _, addr := range n.PeerManager.GetPeers() {
-					peers, err := n.RequestNeighbors(addr)
-					if err != nil {
-						log.Error(err)
-						continue
-					}
-					n.PeerManager.AddPeers(peers...)
-					if n.PeerManager.GetPeersNum() >= maxPeerNum {
-						break
-					}
-				}
-			}
-
-			select {
-			case <-n.stopDiscover:
-				n.waiter.Done()
-				n.discoverStopped <- struct{}{}
-				return
-			case <-time.After(maxSleepTime):
-				continue
-			}
-		}
-	}()
-}
-
-// StopDiscoverPeers stops discovering new peers and disconnect all connections.
-func (n *Node) StopDiscoverPeers() {
-	// request to stop discovering new peers
-	n.stopDiscover <- struct{}{}
-
-	// wait for discovering new peers stopped
-	<-n.discoverStopped
-
-	n.PeerManager.DisconnectAll()
-}
-
-// Wait keeps node running in background.
-func (n *Node) Wait() {
-	n.waiter.Wait()
-}
-
-// GetNeighbors returns the peers known by a node.
-func (n *Node) GetNeighbors(ctx context.Context, addr *wrappers.StringValue) (*Peers, error) {
-	addresses := n.PeerManager.GetPeers()
-	n.PeerManager.AddPeers(addr.Value)
-	return &Peers{Peers: addresses}, nil
-}
-
-// RequestNeighbors requests other neighbor peers from a peer.
-func (n *Node) RequestNeighbors(addr string) ([]string, error) {
-	conn, err := n.PeerManager.GetConnection(addr)
-	if err != nil {
-		return nil, err
-	}
-
-	client := NewNodeServiceClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), maxRequestTime)
-	defer cancel()
-	peers, err := client.GetNeighbors(ctx, &wrappers.StringValue{Value: n.Addr})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get neighbors of peer: %v: %v", addr, err)
-	}
-	return peers.Peers, nil
 }
 
 // Broadcast receives message and broadcasts it to neighbor peers. The node

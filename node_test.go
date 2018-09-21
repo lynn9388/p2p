@@ -22,78 +22,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/wrappers"
-	"google.golang.org/grpc/connectivity"
 )
-
-func TestNode_DiscoverPeers(t *testing.T) {
-	for _, addr := range tests {
-		node := NewNode(addr)
-		node.StartDiscoverPeers(tests[0])
-		defer node.StopDiscoverPeers()
-		node.StartServer()
-		defer node.StopServer()
-	}
-
-	node := NewNode("localhost:9488")
-	node.StartDiscoverPeers(tests[0])
-	defer node.StopDiscoverPeers()
-	node.StartServer()
-	defer node.StopServer()
-	time.Sleep(5 * time.Second)
-	if node.PeerManager.GetPeersNum() != len(tests) {
-		t.Errorf("failed to join the network (expect %v): %v", len(tests), node.PeerManager.GetPeersNum())
-	}
-}
-
-func TestNode_StopDiscoverPeers(t *testing.T) {
-	for _, addr := range tests {
-		node := NewNode(addr)
-		node.StartDiscoverPeers(tests[0])
-		defer node.StopDiscoverPeers()
-		node.StartServer()
-		defer node.StopServer()
-	}
-
-	node := NewNode("localhost:9488")
-	node.StartDiscoverPeers(tests[0])
-	node.StartServer()
-	defer node.StopServer()
-	time.Sleep(5 * time.Second)
-
-	node.StopDiscoverPeers()
-	for _, addr := range node.PeerManager.GetPeers() {
-		if state := node.PeerManager.GetPeerState(addr); state != connectivity.Shutdown {
-			t.Errorf("failed to leave network: %v ", state)
-		}
-	}
-}
-
-func TestNode_RequestNeighbors(t *testing.T) {
-	server := NewNode("localhost:9488")
-	server.StartServer()
-	defer server.StopServer()
-
-	client := NewNode("localhost:9588")
-
-	client.PeerManager.AddPeers(server.Addr)
-	peers, err := client.RequestNeighbors(server.Addr)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(peers) != 0 {
-		t.Errorf("failed to get neighbor peers: %v(expect 0)", len(peers))
-	}
-
-	server.PeerManager.RemovePeer(client.Addr)
-	server.PeerManager.AddPeers(tests...)
-	peers, err = client.RequestNeighbors(server.Addr)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(peers) != len(tests) {
-		t.Errorf("failed to get neighbor peers: %v(expect %v)", len(peers), len(tests))
-	}
-}
 
 func TestNode_RequestBroadcast(t *testing.T) {
 	var nodes []*Node

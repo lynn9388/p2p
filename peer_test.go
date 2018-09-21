@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/connectivity"
 )
@@ -120,5 +121,69 @@ func TestPeerManager_Disconnect(t *testing.T) {
 	}
 	if state := pm.Peers[tests[0]].conn.GetState(); state != connectivity.Shutdown {
 		t.Errorf("failed to disconnect peer: %v %v(expect SHUTDOWN)", tests[0], state)
+	}
+}
+
+func TestPeerManager_discoverPeers(t *testing.T) {
+	server := NewNode("localhost:9488")
+	server.StartServer()
+	defer server.StopServer()
+
+	pm := NewPeerManager("localhost:9588")
+
+	pm.AddPeers(server.Addr)
+	pm.discoverPeers(server.Addr)
+	if len(pm.Peers) != 1 {
+		t.Errorf("failed to get neighbor peers: %v(expect 0)", len(pm.Peers))
+	}
+
+	server.PeerManager.RemovePeer(pm.self)
+	server.PeerManager.AddPeers(tests...)
+	pm.discoverPeers(server.Addr)
+	if len(pm.Peers) != len(tests)+1 {
+		t.Errorf("failed to get neighbor peers: %v(expect %v)", len(pm.Peers), len(tests)+1)
+	}
+}
+
+func TestPeerManager_StartDiscoverPeers(t *testing.T) {
+	for _, addr := range tests {
+		node := NewNode(addr)
+		node.PeerManager.StartDiscoverPeers(tests[0])
+		defer node.PeerManager.StopDiscoverPeers()
+		node.StartServer()
+		defer node.StopServer()
+	}
+
+	node := NewNode("localhost:9488")
+	node.PeerManager.StartDiscoverPeers(tests[0])
+	defer node.PeerManager.StopDiscoverPeers()
+	node.StartServer()
+	defer node.StopServer()
+	time.Sleep(5 * time.Second)
+	if node.PeerManager.GetPeersNum() != len(tests) {
+		t.Errorf("failed to join the network (expect %v): %v", len(tests), node.PeerManager.GetPeersNum())
+	}
+}
+
+func TestPeerManager_StopDiscoverPeers(t *testing.T) {
+	for _, addr := range tests {
+		node := NewNode(addr)
+		node.PeerManager.StartDiscoverPeers(tests[0])
+		defer node.PeerManager.StopDiscoverPeers()
+		node.StartServer()
+		defer node.StopServer()
+	}
+
+	node := NewNode("localhost:9488")
+	node.PeerManager.StartDiscoverPeers(tests[0])
+	node.StartServer()
+	defer node.StopServer()
+	time.Sleep(5 * time.Second)
+
+	node.PeerManager.StopDiscoverPeers()
+	for _, addr := range node.PeerManager.GetPeers() {
+		if state := node.PeerManager.GetPeerState(addr); state != connectivity.Shutdown {
+			t.Errorf("failed to leave network: %v ", state)
+		}
 	}
 }

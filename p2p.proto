@@ -13,10 +13,13 @@ message Peers {
 
 // NodeService is the basic services provided by a node.
 service NodeService {
-    // GetNeighbors returns the peers known by a node
-    rpc GetNeighbors (google.protobuf.StringValue) returns (Peers);
     // Broadcast receives message and broadcasts it to neighbor peers.
     rpc Broadcast (google.protobuf.Any) returns (google.protobuf.Empty);
+}
+
+service PeerService {
+    // GetNeighbors returns the already known neighbor peers.
+    rpc GetNeighbors (google.protobuf.StringValue) returns (Peers);
 }
 
 service MessageService {

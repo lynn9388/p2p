@@ -38,7 +38,7 @@ func (m *Peers) Reset()         { *m = Peers{} }
 func (m *Peers) String() string { return proto.CompactTextString(m) }
 func (*Peers) ProtoMessage()    {}
 func (*Peers) Descriptor() ([]byte, []int) {
-	return fileDescriptor_p2p_39e483f84f474102, []int{0}
+	return fileDescriptor_p2p_809880f5035f5b1f, []int{0}
 }
 func (m *Peers) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_Peers.Unmarshal(m, b)
@@ -81,8 +81,6 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type NodeServiceClient interface {
-	// GetNeighbors returns the peers known by a node
-	GetNeighbors(ctx context.Context, in *wrappers.StringValue, opts ...grpc.CallOption) (*Peers, error)
 	// Broadcast receives message and broadcasts it to neighbor peers.
 	Broadcast(ctx context.Context, in *any.Any, opts ...grpc.CallOption) (*empty.Empty, error)
 }
@@ -93,15 +91,6 @@ type nodeServiceClient struct {
 
 func NewNodeServiceClient(cc *grpc.ClientConn) NodeServiceClient {
 	return &nodeServiceClient{cc}
-}
-
-func (c *nodeServiceClient) GetNeighbors(ctx context.Context, in *wrappers.StringValue, opts ...grpc.CallOption) (*Peers, error) {
-	out := new(Peers)
-	err := c.cc.Invoke(ctx, "/p2p.NodeService/GetNeighbors", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *nodeServiceClient) Broadcast(ctx context.Context, in *any.Any, opts ...grpc.CallOption) (*empty.Empty, error) {
@@ -115,32 +104,12 @@ func (c *nodeServiceClient) Broadcast(ctx context.Context, in *any.Any, opts ...
 
 // NodeServiceServer is the server API for NodeService service.
 type NodeServiceServer interface {
-	// GetNeighbors returns the peers known by a node
-	GetNeighbors(context.Context, *wrappers.StringValue) (*Peers, error)
 	// Broadcast receives message and broadcasts it to neighbor peers.
 	Broadcast(context.Context, *any.Any) (*empty.Empty, error)
 }
 
 func RegisterNodeServiceServer(s *grpc.Server, srv NodeServiceServer) {
 	s.RegisterService(&_NodeService_serviceDesc, srv)
-}
-
-func _NodeService_GetNeighbors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(wrappers.StringValue)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NodeServiceServer).GetNeighbors(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/p2p.NodeService/GetNeighbors",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NodeServiceServer).GetNeighbors(ctx, req.(*wrappers.StringValue))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _NodeService_Broadcast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -166,12 +135,74 @@ var _NodeService_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*NodeServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetNeighbors",
-			Handler:    _NodeService_GetNeighbors_Handler,
-		},
-		{
 			MethodName: "Broadcast",
 			Handler:    _NodeService_Broadcast_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "p2p.proto",
+}
+
+// PeerServiceClient is the client API for PeerService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+type PeerServiceClient interface {
+	// GetNeighbors returns the already known neighbor peers.
+	GetNeighbors(ctx context.Context, in *wrappers.StringValue, opts ...grpc.CallOption) (*Peers, error)
+}
+
+type peerServiceClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewPeerServiceClient(cc *grpc.ClientConn) PeerServiceClient {
+	return &peerServiceClient{cc}
+}
+
+func (c *peerServiceClient) GetNeighbors(ctx context.Context, in *wrappers.StringValue, opts ...grpc.CallOption) (*Peers, error) {
+	out := new(Peers)
+	err := c.cc.Invoke(ctx, "/p2p.PeerService/GetNeighbors", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// PeerServiceServer is the server API for PeerService service.
+type PeerServiceServer interface {
+	// GetNeighbors returns the already known neighbor peers.
+	GetNeighbors(context.Context, *wrappers.StringValue) (*Peers, error)
+}
+
+func RegisterPeerServiceServer(s *grpc.Server, srv PeerServiceServer) {
+	s.RegisterService(&_PeerService_serviceDesc, srv)
+}
+
+func _PeerService_GetNeighbors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(wrappers.StringValue)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PeerServiceServer).GetNeighbors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/p2p.PeerService/GetNeighbors",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PeerServiceServer).GetNeighbors(ctx, req.(*wrappers.StringValue))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _PeerService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "p2p.PeerService",
+	HandlerType: (*PeerServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetNeighbors",
+			Handler:    _PeerService_GetNeighbors_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -244,22 +275,23 @@ var _MessageService_serviceDesc = grpc.ServiceDesc{
 	Metadata: "p2p.proto",
 }
 
-func init() { proto.RegisterFile("p2p.proto", fileDescriptor_p2p_39e483f84f474102) }
+func init() { proto.RegisterFile("p2p.proto", fileDescriptor_p2p_809880f5035f5b1f) }
 
-var fileDescriptor_p2p_39e483f84f474102 = []byte{
-	// 224 bytes of a gzipped FileDescriptorProto
+var fileDescriptor_p2p_809880f5035f5b1f = []byte{
+	// 230 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2c, 0x30, 0x2a, 0xd0,
 	0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x2e, 0x30, 0x2a, 0x90, 0x92, 0x4b, 0xcf, 0xcf, 0x4f,
 	0xcf, 0x49, 0xd5, 0x07, 0x0b, 0x25, 0x95, 0xa6, 0xe9, 0x97, 0x17, 0x25, 0x16, 0x14, 0xa4, 0x16,
 	0x15, 0x43, 0x14, 0x49, 0x49, 0xa2, 0xcb, 0x27, 0xe6, 0x55, 0x42, 0xa5, 0xa4, 0xd1, 0xa5, 0x52,
 	0x73, 0x0b, 0x4a, 0xa0, 0x92, 0x4a, 0xb2, 0x5c, 0xac, 0x01, 0xa9, 0xa9, 0x45, 0xc5, 0x42, 0x22,
-	0x50, 0x86, 0x04, 0xa3, 0x02, 0xb3, 0x06, 0x67, 0x10, 0x84, 0x63, 0xd4, 0xc4, 0xc8, 0xc5, 0xed,
-	0x97, 0x9f, 0x92, 0x1a, 0x9c, 0x5a, 0x54, 0x96, 0x99, 0x9c, 0x2a, 0x64, 0xc1, 0xc5, 0xe3, 0x9e,
-	0x5a, 0xe2, 0x97, 0x9a, 0x99, 0x9e, 0x91, 0x94, 0x5f, 0x54, 0x2c, 0x24, 0xa3, 0x07, 0x31, 0x5c,
-	0x0f, 0x66, 0xb8, 0x5e, 0x70, 0x49, 0x51, 0x66, 0x5e, 0x7a, 0x58, 0x62, 0x4e, 0x69, 0xaa, 0x14,
-	0x97, 0x1e, 0xc8, 0x17, 0x10, 0xf3, 0x2d, 0xb9, 0x38, 0x9d, 0x8a, 0xf2, 0x13, 0x53, 0x92, 0x13,
-	0x8b, 0x4b, 0x84, 0x44, 0x30, 0xb4, 0x39, 0xe6, 0x55, 0x4a, 0x89, 0x61, 0x88, 0xba, 0x82, 0x5c,
-	0x6a, 0xe4, 0xc7, 0xc5, 0xe7, 0x9b, 0x5a, 0x5c, 0x9c, 0x98, 0x0e, 0x77, 0x86, 0x0d, 0x17, 0x5f,
-	0x50, 0x6a, 0x72, 0x6a, 0x66, 0x59, 0x2a, 0x54, 0x02, 0x87, 0x89, 0x58, 0x45, 0x93, 0xd8, 0xc0,
-	0x3c, 0x63, 0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0xec, 0x60, 0x55, 0xd3, 0x64, 0x01, 0x00, 0x00,
+	0x50, 0x86, 0x04, 0xa3, 0x02, 0xb3, 0x06, 0x67, 0x10, 0x84, 0x63, 0xe4, 0xc1, 0xc5, 0xed, 0x97,
+	0x9f, 0x92, 0x1a, 0x9c, 0x5a, 0x54, 0x96, 0x99, 0x9c, 0x2a, 0x64, 0xc9, 0xc5, 0xe9, 0x54, 0x94,
+	0x9f, 0x98, 0x92, 0x9c, 0x58, 0x5c, 0x22, 0x24, 0xa2, 0x07, 0x31, 0x58, 0x0f, 0x66, 0xb0, 0x9e,
+	0x63, 0x5e, 0xa5, 0x94, 0x18, 0x86, 0xa8, 0x2b, 0xc8, 0x3a, 0x23, 0x77, 0x2e, 0x6e, 0x90, 0x91,
+	0x30, 0x93, 0x2c, 0xb8, 0x78, 0xdc, 0x53, 0x4b, 0xfc, 0x52, 0x33, 0xd3, 0x33, 0x92, 0xf2, 0x8b,
+	0x8a, 0x85, 0x64, 0x30, 0xb4, 0x05, 0x97, 0x14, 0x65, 0xe6, 0xa5, 0x87, 0x25, 0xe6, 0x94, 0xa6,
+	0x4a, 0x71, 0xe9, 0x81, 0x82, 0x03, 0xe2, 0x24, 0x3f, 0x2e, 0x3e, 0xdf, 0xd4, 0xe2, 0xe2, 0xc4,
+	0x74, 0xb8, 0xab, 0x6c, 0xb8, 0xf8, 0x82, 0x52, 0x93, 0x53, 0x33, 0xcb, 0x52, 0xa1, 0x12, 0x38,
+	0x9c, 0x86, 0x55, 0x34, 0x89, 0x0d, 0xcc, 0x33, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff, 0x47, 0xfd,
+	0xe2, 0x9c, 0x72, 0x01, 0x00, 0x00,
 }
