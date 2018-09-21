@@ -27,9 +27,9 @@ import (
 	"google.golang.org/grpc"
 )
 
-func TestSendMessage(t *testing.T) {
-	sendMessage := "lynn"
-	replyMessage := "9388"
+func TestMessageManager_ReceiveMessage(t *testing.T) {
+	sendMsg := "lynn"
+	replyMsg := "9388"
 
 	checkStringMessage := func(ctx context.Context, msg *any.Any) (*any.Any, error) {
 		var err error
@@ -38,11 +38,11 @@ func TestSendMessage(t *testing.T) {
 			t.Error(err)
 		}
 
-		if m.Value != sendMessage {
+		if m.Value != sendMsg {
 			t.Errorf("faild to receive message: %v", m.Value)
 		}
 
-		reply, err := ptypes.MarshalAny(&wrappers.StringValue{Value: replyMessage})
+		reply, err := ptypes.MarshalAny(&wrappers.StringValue{Value: replyMsg})
 		if err != nil {
 			t.Error(err)
 		}
@@ -61,7 +61,7 @@ func TestSendMessage(t *testing.T) {
 	}
 	defer conn.Close()
 
-	reply, err := SendMessage(conn, context.Background(), &wrappers.StringValue{Value: sendMessage}, 1*time.Second)
+	reply, err := sendMessage(conn, context.Background(), &wrappers.StringValue{Value: sendMsg}, 1*time.Second)
 	if err != nil {
 		t.Error(err)
 	}
@@ -71,7 +71,7 @@ func TestSendMessage(t *testing.T) {
 		t.Error(err)
 	}
 
-	if m.Value != replyMessage {
+	if m.Value != replyMsg {
 		t.Errorf("faild to receive reply: %v", m.Value)
 	}
 }

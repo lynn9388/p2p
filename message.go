@@ -1,3 +1,19 @@
+/*
+ * Copyright © 2018 Lynn <lynn9388@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package p2p
 
 import (
@@ -44,8 +60,8 @@ func (mm *MessageManager) ReceiveMessage(ctx context.Context, msg *any.Any) (*an
 	return p(ctx, msg)
 }
 
-// SendMessage sends message to a peer through a connection.
-func SendMessage(conn *grpc.ClientConn, ctx context.Context, msg proto.Message, timeout time.Duration) (*any.Any, error) {
+// sendMessage sends message to a peer through a connection.
+func sendMessage(conn *grpc.ClientConn, ctx context.Context, msg proto.Message, timeout time.Duration) (*any.Any, error) {
 	client := NewMessageServiceClient(conn)
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
