@@ -33,7 +33,7 @@ var tests = []string{
 }
 
 func TestPeerManager_AddPeers(t *testing.T) {
-	pm := NewPeerManager("localhost:9488")
+	pm := NewPeerManager(tests[0])
 	waiter := sync.WaitGroup{}
 
 	for i := 0; i < 10; i++ {
@@ -51,7 +51,7 @@ func TestPeerManager_AddPeers(t *testing.T) {
 }
 
 func TestPeerManager_RemovePeer(t *testing.T) {
-	pm := NewPeerManager("localhost:9488")
+	pm := NewPeerManager(tests[0])
 	waiter := sync.WaitGroup{}
 
 	for i := 0; i < 10; i++ {
@@ -75,53 +75,84 @@ func TestPeerManager_RemovePeer(t *testing.T) {
 }
 
 func TestPeerManager_GetConnection(t *testing.T) {
-	pm := NewPeerManager("localhost:9488")
-
 	node := NewNode(tests[0])
 	node.StartServer()
 	defer node.StopServer()
 
-	conn, err := pm.GetConnection(tests[0])
+	pm := NewPeerManager(tests[1])
+	conn, err := pm.GetConnection(node.Addr)
 	if err == nil {
-		t.Errorf("get connection to unknown peer without error: %v", tests[0])
+		t.Errorf("get connection to unknown peer without error: %v", node.Addr)
 	}
 
-	pm.AddPeers(tests[0])
-	conn, err = pm.GetConnection(tests[0])
+	pm.AddPeers(node.Addr)
+	conn, err = pm.GetConnection(node.Addr)
 	if err != nil {
 		t.Error(err)
 	}
 	defer conn.Close()
 	if state := conn.GetState(); state != connectivity.Idle {
-		t.Errorf("failed to get connection to peer: %v %v(Expect IDLE)", tests[0], state)
+		t.Errorf("failed to get connection to peer: %v %v(Expect IDLE)", node.Addr, state)
 	}
 }
 
 func TestPeerManager_Disconnect(t *testing.T) {
-	pm := NewPeerManager("localhost:9488")
-
 	node := NewNode(tests[0])
 	node.StartServer()
 	defer node.StopServer()
 
+	pm := NewPeerManager(tests[1])
+	if err := pm.Disconnect(node.Addr); err == nil {
+		t.Errorf("disconnect to unknown peer without error: %v", node.Addr)
+	}
+
+	pm.AddPeers(node.Addr)
+	_, err := pm.GetConnection(node.Addr)
+	if err != nil {
+		t.Error(err)
+	}
+	if state := pm.Peers[node.Addr].conn.GetState(); state != connectivity.Idle {
+		t.Errorf("failed to get connection to peer: %v %v(expect IDLE)", node.Addr, state)
+	}
+	if err := pm.Disconnect(node.Addr); err != nil {
+		t.Errorf("failed to disconnect peer: %v: %v", node.Addr, err)
+	}
+	if state := pm.Peers[node.Addr].conn.GetState(); state != connectivity.Shutdown {
+		t.Errorf("failed to disconnect peer: %v %v(expect SHUTDOWN)", node.Addr, state)
+	}
+}
+
+func TestPeerManager_DisconnectAll(t *testing.T) {
+	for _, addr := range tests {
+		node := NewNode(addr)
+		node.StartServer()
+		defer node.StopServer()
+	}
+
+	pm := NewPeerManager("localhost:9488")
 	if err := pm.Disconnect(tests[0]); err == nil {
 		t.Errorf("disconnect to unknown peer without error: %v", tests[0])
 	}
 
-	pm.AddPeers(tests[0])
-	_, err := pm.GetConnection(tests[0])
-	if err != nil {
-		t.Error(err)
+	pm.AddPeers(tests...)
+	for _, addr := range tests {
+		conn, err := pm.GetConnection(addr)
+		if err != nil {
+			t.Error(err)
+		}
+
+		if state := conn.GetState(); state != connectivity.Idle {
+			t.Errorf("failed to get connection to peer: %v %v(expect IDLE)", addr, state)
+		}
 	}
-	if state := pm.Peers[tests[0]].conn.GetState(); state != connectivity.Idle {
-		t.Errorf("failed to get connection to peer: %v %v(expect IDLE)", tests[0], state)
+
+	pm.DisconnectAll()
+	for _, addr := range tests {
+		if state := pm.Peers[addr].conn.GetState(); state != connectivity.Shutdown {
+			t.Errorf("failed to disconnect peer: %v %v(expect SHUTDOWN)", addr, state)
+		}
 	}
-	if err := pm.Disconnect(tests[0]); err != nil {
-		t.Errorf("failed to disconnect peer: %v: %v", tests[0], err)
-	}
-	if state := pm.Peers[tests[0]].conn.GetState(); state != connectivity.Shutdown {
-		t.Errorf("failed to disconnect peer: %v %v(expect SHUTDOWN)", tests[0], state)
-	}
+
 }
 
 func TestPeerManager_discoverPeers(t *testing.T) {
@@ -137,7 +168,7 @@ func TestPeerManager_discoverPeers(t *testing.T) {
 		t.Errorf("failed to get neighbor peers: %v(expect 0)", len(pm.Peers))
 	}
 
-	server.PeerManager.RemovePeer(pm.self)
+	server.PeerManager.RemovePeer(pm.addr)
 	server.PeerManager.AddPeers(tests...)
 	pm.discoverPeers(server.Addr)
 	if len(pm.Peers) != len(tests)+1 {
@@ -148,18 +179,19 @@ func TestPeerManager_discoverPeers(t *testing.T) {
 func TestPeerManager_StartDiscoverPeers(t *testing.T) {
 	for _, addr := range tests {
 		node := NewNode(addr)
-		node.PeerManager.StartDiscoverPeers(tests[0])
-		defer node.PeerManager.StopDiscoverPeers()
 		node.StartServer()
 		defer node.StopServer()
+		node.PeerManager.StartDiscoverPeers(tests[0])
+		defer node.PeerManager.StopDiscoverPeers()
 	}
 
 	node := NewNode("localhost:9488")
-	node.PeerManager.StartDiscoverPeers(tests[0])
-	defer node.PeerManager.StopDiscoverPeers()
 	node.StartServer()
 	defer node.StopServer()
+	node.PeerManager.StartDiscoverPeers(tests[0])
+	defer node.PeerManager.StopDiscoverPeers()
 	time.Sleep(5 * time.Second)
+
 	if node.PeerManager.GetPeersNum() != len(tests) {
 		t.Errorf("failed to join the network (expect %v): %v", len(tests), node.PeerManager.GetPeersNum())
 	}
@@ -168,16 +200,16 @@ func TestPeerManager_StartDiscoverPeers(t *testing.T) {
 func TestPeerManager_StopDiscoverPeers(t *testing.T) {
 	for _, addr := range tests {
 		node := NewNode(addr)
-		node.PeerManager.StartDiscoverPeers(tests[0])
-		defer node.PeerManager.StopDiscoverPeers()
 		node.StartServer()
 		defer node.StopServer()
+		node.PeerManager.StartDiscoverPeers(tests[0])
+		defer node.PeerManager.StopDiscoverPeers()
 	}
 
 	node := NewNode("localhost:9488")
-	node.PeerManager.StartDiscoverPeers(tests[0])
 	node.StartServer()
 	defer node.StopServer()
+	node.PeerManager.StartDiscoverPeers(tests[0])
 	time.Sleep(5 * time.Second)
 
 	node.PeerManager.StopDiscoverPeers()

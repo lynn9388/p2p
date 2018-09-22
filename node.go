@@ -22,7 +22,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"flag"
 	"fmt"
 	"net"
 	"sync"
@@ -49,19 +48,12 @@ var (
 	log *zap.SugaredLogger // default logger
 
 	maxRequestTime time.Duration // timeout for request rpc
-	maxSleepTime   time.Duration // sleep time between discover neighbor peers
 )
 
 func init() {
 	logger, _ := zap.NewDevelopment()
 	log = logger.Sugar()
 	maxRequestTime = 5 * time.Second
-
-	if flag.Lookup("test.v") != nil { // go test
-		maxSleepTime = 2 * time.Second
-	} else {
-		maxSleepTime = 5 * time.Second
-	}
 }
 
 // NewNode initials a new node with specific network address.

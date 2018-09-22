@@ -36,7 +36,8 @@ type peer struct {
 
 // PeerManager manages the peers that a local node known.
 type PeerManager struct {
-	self  string           // address of node
+	addr string // network address of local node
+
 	Peers map[string]*peer // known remote peers
 	Mux   sync.RWMutex     // mutual exclusion lock for peers
 
@@ -45,20 +46,25 @@ type PeerManager struct {
 	waiter          sync.WaitGroup // wait background goroutines
 }
 
-var maxPeerNum int // max neighbor peers' number
+var (
+	maxPeerNum           int           // max neighbor peers' number
+	maxDiscoverSleepTime time.Duration // sleep time between discover neighbor peers
+)
 
 func init() {
 	if flag.Lookup("test.v") != nil { // go test
 		maxPeerNum = 5
+		maxDiscoverSleepTime = 2 * time.Second
 	} else {
 		maxPeerNum = 20
+		maxDiscoverSleepTime = 5 * time.Second
 	}
 }
 
 // NewPeerManager returns a new peer manager with its own network address.
 func NewPeerManager(self string) *PeerManager {
 	return &PeerManager{
-		self:  self,
+		addr:  self,
 		Peers: make(map[string]*peer),
 		Mux:   sync.RWMutex{},
 
@@ -75,10 +81,10 @@ func (pm *PeerManager) AddPeers(addresses ...string) {
 	defer pm.Mux.Unlock()
 
 	for _, addr := range addresses {
-		if addr != pm.self {
+		if addr != pm.addr {
 			if _, ok := pm.Peers[addr]; !ok {
 				pm.Peers[addr] = &peer{Addr: addr}
-				log.Debugf("%v adds peer: %v", pm.self, addr)
+				log.Debugf("%v adds peer: %v", pm.addr, addr)
 			}
 		}
 	}
@@ -96,7 +102,7 @@ func (pm *PeerManager) RemovePeer(addr string) error {
 		}
 
 		delete(pm.Peers, addr)
-		log.Debugf("%v removes peer: %v", pm.self, addr)
+		log.Debugf("%v removes peer: %v", pm.addr, addr)
 	}
 	return nil
 }
@@ -141,7 +147,7 @@ func (pm *PeerManager) GetConnection(addr string) (*grpc.ClientConn, error) {
 
 	p, ok := pm.Peers[addr]
 	if !ok {
-		return nil, fmt.Errorf("%v failed to get connection: unknown peer: %v", pm.self, addr)
+		return nil, fmt.Errorf("%v failed to get connection: unknown peer: %v", pm.addr, addr)
 	}
 
 	var state connectivity.State
@@ -161,7 +167,7 @@ func (pm *PeerManager) GetConnection(addr string) (*grpc.ClientConn, error) {
 			return nil, err
 		}
 		p.conn = conn
-		log.Debugf("%v connected to peer: %v", pm.self, addr)
+		log.Debugf("%v connected to peer: %v", pm.addr, addr)
 	}
 	return p.conn, nil
 }
@@ -170,14 +176,14 @@ func (pm *PeerManager) GetConnection(addr string) (*grpc.ClientConn, error) {
 func (pm *PeerManager) disconnect(addr string) error {
 	p, ok := pm.Peers[addr]
 	if !ok {
-		return fmt.Errorf("%v failed to disconnect: unknown peer: %v", pm.self, addr)
+		return fmt.Errorf("%v failed to disconnect: unknown peer: %v", pm.addr, addr)
 	}
 
 	if p.conn != nil {
 		if err := p.conn.Close(); err != nil {
-			return fmt.Errorf("%v failed to disconnect: %v", pm.self, err)
+			return fmt.Errorf("%v failed to disconnect: %v", pm.addr, err)
 		}
-		log.Debugf("%v disconnected to peer: %v", pm.self, addr)
+		log.Debugf("%v disconnected to peer: %v", pm.addr, addr)
 	}
 	return nil
 }
@@ -216,9 +222,9 @@ func (pm *PeerManager) discoverPeers(addr string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	peers, err := client.GetNeighbors(ctx, &wrappers.StringValue{Value: pm.self})
+	peers, err := client.GetNeighbors(ctx, &wrappers.StringValue{Value: pm.addr})
 	if err != nil {
-		log.Errorf("%v failed to get neighbors of peer: %v: %v", pm.self, addr, err)
+		log.Errorf("%v failed to get neighbors of peer: %v: %v", pm.addr, addr, err)
 		return
 	}
 
@@ -246,7 +252,7 @@ func (pm *PeerManager) StartDiscoverPeers(bootstraps ...string) {
 				pm.waiter.Done()
 				pm.discoverStopped <- struct{}{}
 				return
-			case <-time.After(maxSleepTime):
+			case <-time.After(maxDiscoverSleepTime):
 				continue
 			}
 		}
