@@ -18,6 +18,8 @@ package p2p
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"path"
 	"time"
@@ -31,15 +33,22 @@ import (
 // Process is the function to process one type of message.
 type Process func(context.Context, *any.Any) (*any.Any, error)
 
+type hashLog struct {
+	hash string
+	time time.Time
+}
+
 // MessageManager is the service to receive and process messages.
 type MessageManager struct {
-	ProcessSet map[string]Process
+	ProcessSet map[string]Process // process for each message
+	MessageLog []hashLog          // hash and time of recent sent/received messages
 }
 
 // NewMessageManager returns a initialized message manager.
 func NewMessageManager() *MessageManager {
 	return &MessageManager{
 		ProcessSet: make(map[string]Process, 0),
+		MessageLog: make([]hashLog, 0),
 	}
 }
 
@@ -49,19 +58,8 @@ func (mm *MessageManager) RegisterProcess(x proto.Message, p Process) {
 	mm.ProcessSet[name] = p
 }
 
-// ReceiveMessage receives message from a peer and process it.
-func (mm *MessageManager) ReceiveMessage(ctx context.Context, msg *any.Any) (*any.Any, error) {
-	name := path.Base(msg.TypeUrl)
-	p, ok := mm.ProcessSet[name]
-	if !ok {
-		return nil, fmt.Errorf("failed to find process for message type: %v", name)
-	}
-
-	return p(ctx, msg)
-}
-
-// sendMessage sends message to a peer through a connection.
-func sendMessage(conn *grpc.ClientConn, ctx context.Context, msg proto.Message, timeout time.Duration) (*any.Any, error) {
+// SendMessage sends message to a peer through a connection.
+func (mm *MessageManager) SendMessage(conn *grpc.ClientConn, ctx context.Context, msg proto.Message, timeout time.Duration) (*any.Any, error) {
 	client := NewMessageServiceClient(conn)
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -72,5 +70,23 @@ func sendMessage(conn *grpc.ClientConn, ctx context.Context, msg proto.Message, 
 		return nil, err
 	}
 
+	mm.MessageLog = append(mm.MessageLog, hashLog{hash: hash(anyMsg.Value), time: time.Now()})
 	return client.ReceiveMessage(ctx, anyMsg)
+}
+
+// ReceiveMessage receives message from a peer and process it.
+func (mm *MessageManager) ReceiveMessage(ctx context.Context, msg *any.Any) (*any.Any, error) {
+	name := path.Base(msg.TypeUrl)
+	p, ok := mm.ProcessSet[name]
+	if !ok {
+		return nil, fmt.Errorf("failed to find process for message type: %v", name)
+	}
+	mm.MessageLog = append(mm.MessageLog, hashLog{hash: hash(msg.Value), time: time.Now()})
+	return p(ctx, msg)
+}
+
+// hash returns the hash value of data.
+func hash(data []byte) string {
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
 }

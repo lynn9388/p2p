@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-func TestMessageManager_ReceiveMessage(t *testing.T) {
+func TestMessageManager(t *testing.T) {
 	sendMsg := "lynn"
 	replyMsg := "9388"
 
@@ -61,7 +61,8 @@ func TestMessageManager_ReceiveMessage(t *testing.T) {
 	}
 	defer conn.Close()
 
-	reply, err := sendMessage(conn, context.Background(), &wrappers.StringValue{Value: sendMsg}, 1*time.Second)
+	mm := NewMessageManager()
+	reply, err := mm.SendMessage(conn, context.Background(), &wrappers.StringValue{Value: sendMsg}, 1*time.Second)
 	if err != nil {
 		t.Error(err)
 	}
