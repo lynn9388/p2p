@@ -27,31 +27,34 @@ import (
 	"google.golang.org/grpc"
 )
 
-func TestMessageManager(t *testing.T) {
-	sendMsg := "lynn"
-	replyMsg := "9388"
+var (
+	testSendMsg  = "lynn"
+	testReplyMsg = "9388"
+)
 
-	checkStringMessage := func(ctx context.Context, msg *any.Any) (*any.Any, error) {
-		var err error
-		m := &wrappers.StringValue{}
-		if err = ptypes.UnmarshalAny(msg, m); err != nil {
-			t.Error(err)
-		}
-
-		if m.Value != sendMsg {
-			t.Errorf("faild to receive message: %v", m.Value)
-		}
-
-		reply, err := ptypes.MarshalAny(&wrappers.StringValue{Value: replyMsg})
-		if err != nil {
-			t.Error(err)
-		}
-
-		return reply, err
+func checkStringMessage(ctx context.Context, msg *any.Any) (*any.Any, error) {
+	var err error
+	m := &wrappers.StringValue{}
+	if err = ptypes.UnmarshalAny(msg, m); err != nil {
+		log.Error(err)
 	}
 
+	if m.Value != testSendMsg {
+		log.Errorf("failed to receive message: %v", m.Value)
+	}
+
+	reply, err := ptypes.MarshalAny(&wrappers.StringValue{Value: testReplyMsg})
+	if err != nil {
+		log.Error(err)
+	}
+
+	return reply, err
+}
+
+func TestMessageManager(t *testing.T) {
+
 	server := NewNode(tests[0])
-	server.MessageManager.RegisterProcess(&wrappers.StringValue{}, checkStringMessage)
+	server.RegisterProcess(&wrappers.StringValue{}, checkStringMessage)
 	server.StartServer()
 	defer server.StopServer()
 
@@ -62,7 +65,13 @@ func TestMessageManager(t *testing.T) {
 	defer conn.Close()
 
 	mm := NewMessageManager()
-	reply, err := mm.SendMessage(conn, context.Background(), &wrappers.StringValue{Value: sendMsg}, 1*time.Second)
+
+	_, err = mm.SendMessage(conn, context.Background(), &wrappers.StringValue{Value: testSendMsg}, 0)
+	if err == nil {
+		t.Error("failed to timeout")
+	}
+
+	reply, err := mm.SendMessage(conn, context.Background(), &wrappers.StringValue{Value: testSendMsg}, 1*time.Second)
 	if err != nil {
 		t.Error(err)
 	}
@@ -72,7 +81,7 @@ func TestMessageManager(t *testing.T) {
 		t.Error(err)
 	}
 
-	if m.Value != replyMsg {
+	if m.Value != testReplyMsg {
 		t.Errorf("faild to receive reply: %v", m.Value)
 	}
 }

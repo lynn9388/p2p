@@ -79,7 +79,9 @@ func (mm *MessageManager) ReceiveMessage(ctx context.Context, msg *any.Any) (*an
 	name := path.Base(msg.TypeUrl)
 	p, ok := mm.ProcessSet[name]
 	if !ok {
-		return nil, fmt.Errorf("failed to find process for message type: %v", name)
+		err := fmt.Errorf("failed to find process for message type: %v", name)
+		log.Error(err)
+		return nil, err
 	}
 	mm.MessageLog = append(mm.MessageLog, hashLog{hash: hash(msg.Value), time: time.Now()})
 	return p(ctx, msg)
