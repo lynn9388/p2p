@@ -140,14 +140,21 @@ func (pm *PeerManager) GetPeerState(addr string) connectivity.State {
 	return p.conn.GetState()
 }
 
-// GetConnection returns a connection to a peer if the peer is known.
+// GetConnection returns a connection to a peer.
 func (pm *PeerManager) GetConnection(addr string) (*grpc.ClientConn, error) {
+	pm.Mux.RLock()
+	p, ok := pm.Peers[addr]
+	pm.Mux.RUnlock()
+	if !ok {
+		pm.AddPeers(addr)
+	}
+
 	pm.Mux.Lock()
 	defer pm.Mux.Unlock()
 
-	p, ok := pm.Peers[addr]
+	p, ok = pm.Peers[addr]
 	if !ok {
-		return nil, fmt.Errorf("%v failed to get connection: unknown peer: %v", pm.addr, addr)
+		return nil, fmt.Errorf("failed to get connection to peer: %v", addr)
 	}
 
 	var state connectivity.State

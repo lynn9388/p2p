@@ -81,8 +81,8 @@ func TestPeerManager_GetConnection(t *testing.T) {
 
 	pm := NewPeerManager(tests[1])
 	conn, err := pm.GetConnection(node.Addr)
-	if err == nil {
-		t.Errorf("get connection to unknown peer without error: %v", node.Addr)
+	if err != nil {
+		t.Errorf("failed to get connection to unknown peer: %v", node.Addr)
 	}
 
 	pm.AddPeers(node.Addr)
