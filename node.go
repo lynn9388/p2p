@@ -18,17 +18,19 @@
 package p2p
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
+	"path"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/any"
-	"github.com/golang/protobuf/ptypes/empty"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -36,24 +38,21 @@ import (
 
 // Node is a independent entity in the P2P network.
 type Node struct {
-	Addr           string          // network address
-	Server         *grpc.Server    // gRPC server
-	PeerManager    *PeerManager    // peer manager
-	MessageManager *MessageManager // message manager
-
-	messages sync.Map // hash and time of recent received messages
+	Addr            string       // network address
+	Server          *grpc.Server // gRPC server
+	PeerManager     *PeerManager // peer manager
+	*MessageManager              // message manager
 }
 
 var (
-	log *zap.SugaredLogger // default logger
-
-	maxRequestTime time.Duration // timeout for request rpc
+	log     *zap.SugaredLogger // default logger
+	timeout time.Duration      // timeout for request rpc
 )
 
 func init() {
 	logger, _ := zap.NewDevelopment()
 	log = logger.Sugar()
-	maxRequestTime = 5 * time.Second
+	timeout = 5 * time.Second
 }
 
 // NewNode initials a new node with specific network address.
@@ -63,8 +62,6 @@ func NewNode(addr string) *Node {
 		Server:         grpc.NewServer(),
 		PeerManager:    NewPeerManager(addr),
 		MessageManager: NewMessageManager(),
-
-		messages: sync.Map{},
 	}
 }
 
@@ -82,9 +79,9 @@ func (n *Node) StartServer() {
 	}
 
 	// register internal service
-	RegisterNodeServiceServer(n.Server, n)
 	RegisterPeerServiceServer(n.Server, n.PeerManager)
 	RegisterMessageServiceServer(n.Server, n.MessageManager)
+	RegisterNodeServiceServer(n.Server, n)
 
 	log.Infof("server is listening at: %v", n.Addr)
 	go n.Server.Serve(lis)
@@ -98,62 +95,108 @@ func (n *Node) StopServer() {
 	}
 }
 
-// Broadcast receives message and broadcasts it to neighbor peers. The node
-// will not broadcast messages with same content, so the messages should append
-// extra info to identify messages.
-func (n *Node) Broadcast(ctx context.Context, msg *any.Any) (*empty.Empty, error) {
-	key := hash(msg.Value)
-	if _, ok := n.messages.LoadOrStore(key, time.Now()); ok {
-		log.Debugf("%v received duplicate message: %v", n.Addr, key)
-		return &empty.Empty{}, nil
+// SendMessage sends a message to a peer.
+func (n *Node) SendMessage(addr string, msg proto.Message) (*any.Any, error) {
+	conn, err := n.PeerManager.GetConnection(addr)
+	if err != nil {
+		return nil, err
 	}
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return &empty.Empty{}, errors.New("failed to get metadata from context")
-	}
-	addresses := md.Get("address")
-	if len(addresses) != 1 {
-		return &empty.Empty{}, errors.New("failed to get address of message sender from context")
-	}
-
-	log.Debugf("%v received message from peer: %v", n.Addr, addresses[0])
-
-	for _, addr := range n.PeerManager.GetPeers() {
-		if addr != addresses[0] {
-			if err := n.RequestBroadcast(addr, msg); err != nil {
-				log.Error(err)
-			}
-		}
-	}
-	return &empty.Empty{}, nil
+	return n.MessageManager.SendMessage(context.Background(), conn, msg, timeout)
 }
 
-// RequestBroadcast requests to broadcast a message to entire network.
-func (n *Node) RequestBroadcast(addr string, msg *any.Any) error {
+// Broadcast sends a broadcast message to the neighbor peers.
+func (n *Node) Broadcast(msg proto.Message) error {
+	anyMsg, err := ptypes.MarshalAny(msg)
+	if err != nil {
+		return err
+	}
+
+	var buff bytes.Buffer
+	var wg sync.WaitGroup
+	for _, addr := range n.PeerManager.GetPeers() {
+		wg.Add(1)
+		go func(addr string) {
+			if err := n.SendBroadcast(addr, anyMsg); err != nil {
+				log.Errorf("failed to broadcast message to peer: %v : %v", addr, err)
+				buff.WriteString(err.Error() + "\n")
+			}
+			wg.Done()
+		}(addr)
+	}
+	wg.Wait()
+	if buff.Len() != 0 {
+		return errors.New(strings.TrimSpace(buff.String()))
+	}
+	return nil
+}
+
+// SendBroadcast sends a broadcast message to a peers.
+func (n *Node) SendBroadcast(addr string, msg *any.Any) error {
 	conn, err := n.PeerManager.GetConnection(addr)
 	if err != nil {
 		return err
 	}
 
-	n.messages.Store(hash(msg.Value), time.Now())
-
 	client := NewNodeServiceClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), maxRequestTime)
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("address", n.Addr))
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	ctx = metadata.NewOutgoingContext(ctx, metadata.Pairs("address", n.Addr))
-	_, err = client.Broadcast(ctx, msg)
-	if err != nil {
-		return fmt.Errorf("failed to broadcast message to peer: %v: %v", addr, err)
-	}
 
-	log.Debugf("%v sends message to peer: %v", n.Addr, addr)
-	return nil
+	n.MessageLog = append(n.MessageLog, hashLog{hash: hash(msg.Value), time: time.Now()})
+	_, err = client.ReceiveBroadcast(ctx, msg)
+	return err
 }
 
-// hash returns the hash value of data.
-func hash(data []byte) string {
-	hash := sha256.Sum256(data)
-	return hex.EncodeToString(hash[:])
+// ReceiveBroadcast receives message and relay message to neighbor peers.
+// The node will not broadcast messages with same content within 1 minutes.
+func (n *Node) ReceiveBroadcast(ctx context.Context, msg *any.Any) (*any.Any, error) {
+	printError := func(err error) error {
+		log.Error(err)
+		return err
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, printError(errors.New("failed to get metadata from context"))
+	}
+	addresses := md.Get("address")
+	if len(addresses) != 1 {
+		return nil, printError(errors.New("failed to get address of message sender from context"))
+	}
+
+	hash := hash(msg.Value)
+	now := time.Now()
+	for i := len(n.MessageLog) - 1; i >= 0; i-- {
+		if n.MessageLog[i].time.Add(1 * time.Minute).Before(now) {
+			break
+		}
+
+		if n.MessageLog[i].hash == hash {
+			err := fmt.Errorf("%v received duplicate message from peer: %v", n.Addr, addresses[0])
+			log.Debug(err)
+			return &any.Any{}, nil
+		}
+	}
+
+	name := path.Base(msg.TypeUrl)
+	p, ok := n.ProcessSet[name]
+	if !ok {
+		return nil, printError(fmt.Errorf("failed to find process for message type: %v", name))
+	}
+	n.MessageLog = append(n.MessageLog, hashLog{hash: hash, time: now})
+
+	log.Debugf("%v received broadcast message from peer: %v", n.Addr, addresses[0])
+
+	for _, addr := range n.PeerManager.GetPeers() {
+		if addr != addresses[0] {
+			go func() {
+				if err := n.SendBroadcast(addr, msg); err != nil {
+					log.Error(err)
+				}
+			}()
+		}
+	}
+
+	return p(ctx, msg)
 }

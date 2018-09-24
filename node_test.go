@@ -20,14 +20,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/wrappers"
 )
 
-func TestNode_RequestBroadcast(t *testing.T) {
+func TestNode_Broadcast(t *testing.T) {
 	var nodes []*Node
 	for _, addr := range tests {
 		node := NewNode(addr)
+		node.RegisterProcess(&wrappers.StringValue{}, checkStringMessage)
 		node.StartServer()
 		defer node.StopServer()
 		nodes = append(nodes, node)
@@ -38,24 +38,14 @@ func TestNode_RequestBroadcast(t *testing.T) {
 	nodes[2].PeerManager.AddPeers(nodes[0].Addr, nodes[3].Addr)
 	nodes[3].PeerManager.AddPeers(nodes[1].Addr, nodes[2].Addr)
 
-	msg, err := ptypes.MarshalAny(&wrappers.StringValue{Value: "Hello"})
-	if err != nil {
-		t.Error(err)
-	}
-
-	if err = nodes[0].RequestBroadcast(nodes[1].Addr, msg); err != nil {
+	if err := nodes[0].Broadcast(&wrappers.StringValue{Value: testSendMsg}); err != nil {
 		t.Error(err)
 	}
 	time.Sleep(1 * time.Second)
 
 	for _, node := range nodes {
-		length := 0
-		node.messages.Range(func(key, value interface{}) bool {
-			length++
-			return true
-		})
-		if length != 1 {
-			t.Errorf("failed to broadcast message: %v(expecte 1)", length)
+		if len(node.MessageLog) != 2 {
+			t.Errorf("%v failed to broadcast message: %v(expecte 2)", node.Addr, len(node.MessageLog))
 		}
 	}
 }

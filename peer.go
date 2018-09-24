@@ -196,7 +196,7 @@ func (pm *PeerManager) Disconnect(addr string) error {
 	return pm.disconnect(addr)
 }
 
-// Disconnect closes all the connections to known peers.
+// DisconnectAll closes all the connections to known peers.
 func (pm *PeerManager) DisconnectAll() {
 	pm.Mux.Lock()
 	defer pm.Mux.Unlock()

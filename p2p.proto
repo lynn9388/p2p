@@ -2,19 +2,12 @@ syntax = "proto3";
 
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/any.proto";
-import "google/protobuf/empty.proto";
 
 package p2p;
 
 // Peers is a list of peer's network address.
 message Peers {
     repeated string Peers = 1;
-}
-
-// NodeService is the basic services provided by a node.
-service NodeService {
-    // Broadcast receives message and broadcasts it to neighbor peers.
-    rpc Broadcast (google.protobuf.Any) returns (google.protobuf.Empty);
 }
 
 service PeerService {
@@ -25,4 +18,10 @@ service PeerService {
 service MessageService {
     // ReceiveMessage receives message from a peer.
     rpc ReceiveMessage (google.protobuf.Any) returns (google.protobuf.Any);
+}
+
+// NodeService is the basic services provided by a node.
+service NodeService {
+    // ReceiveBroadcast receives message and broadcasts it to neighbor peers.
+    rpc ReceiveBroadcast (google.protobuf.Any) returns (google.protobuf.Any);
 }

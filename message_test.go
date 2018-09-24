@@ -52,7 +52,6 @@ func checkStringMessage(ctx context.Context, msg *any.Any) (*any.Any, error) {
 }
 
 func TestMessageManager(t *testing.T) {
-
 	server := NewNode(tests[0])
 	server.RegisterProcess(&wrappers.StringValue{}, checkStringMessage)
 	server.StartServer()
@@ -66,12 +65,12 @@ func TestMessageManager(t *testing.T) {
 
 	mm := NewMessageManager()
 
-	_, err = mm.SendMessage(conn, context.Background(), &wrappers.StringValue{Value: testSendMsg}, 0)
+	_, err = mm.SendMessage(context.Background(), conn, &wrappers.StringValue{Value: testSendMsg}, 0)
 	if err == nil {
 		t.Error("failed to timeout")
 	}
 
-	reply, err := mm.SendMessage(conn, context.Background(), &wrappers.StringValue{Value: testSendMsg}, 1*time.Second)
+	reply, err := mm.SendMessage(context.Background(), conn, &wrappers.StringValue{Value: testSendMsg}, 1*time.Second)
 	if err != nil {
 		t.Error(err)
 	}

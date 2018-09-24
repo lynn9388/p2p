@@ -59,7 +59,7 @@ func (mm *MessageManager) RegisterProcess(x proto.Message, p Process) {
 }
 
 // SendMessage sends message to a peer through a connection.
-func (mm *MessageManager) SendMessage(conn *grpc.ClientConn, ctx context.Context, msg proto.Message, timeout time.Duration) (*any.Any, error) {
+func (mm *MessageManager) SendMessage(ctx context.Context, conn *grpc.ClientConn, msg proto.Message, timeout time.Duration) (*any.Any, error) {
 	client := NewMessageServiceClient(conn)
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
