@@ -38,10 +38,12 @@ import (
 
 // Node is a independent entity in the P2P network.
 type Node struct {
-	Addr            string       // network address
-	Server          *grpc.Server // gRPC server
-	PeerManager     *PeerManager // peer manager
-	*MessageManager              // message manager
+	Addr            string         // network address
+	Server          *grpc.Server   // gRPC server
+	waiter          sync.WaitGroup // wait server running in background
+	PeerManager     *PeerManager   // peer manager
+	*MessageManager                // message manager
+
 }
 
 var (
@@ -84,6 +86,7 @@ func (n *Node) StartServer() {
 	RegisterNodeServiceServer(n.Server, n)
 
 	log.Infof("server is listening at: %v", n.Addr)
+	n.waiter.Add(1)
 	go n.Server.Serve(lis)
 }
 
@@ -92,7 +95,13 @@ func (n *Node) StopServer() {
 	if n.Server != nil {
 		n.Server.Stop()
 		log.Infof("server stopped: %v", n.Addr)
+		n.waiter.Done()
 	}
+}
+
+// Wait keeps the server of the node running in background.
+func (n *Node) Wait() {
+	n.waiter.Wait()
 }
 
 // SendMessage sends a message to a peer.
