@@ -81,12 +81,14 @@ func main() {
 	flag.Parse()
 
 	node := p2p.NewNode("localhost:" + strconv.Itoa(*port))
-	node.DiscoverPeers("localhost:9388")
 	node.StartServer()
+	defer node.StopServer()
+	node.PeerManager.StartDiscoverPeers("localhost:9388")
+	defer node.PeerManager.StopDiscoverPeers()
 	node.Wait()
 }
 ```
 
-You can try it with `go run main.go -port PORT` in **example** directory. (Try to run several examples with different port.)
+Try to run several examples with different port.
 
 For more information you can check the [GoDoc](https://godoc.org/github.com/lynn9388/p2p)
