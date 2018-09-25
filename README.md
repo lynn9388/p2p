@@ -38,23 +38,23 @@ In the P2P network, each node will choose some nodes as their neighbors.
 The neighbor "nodes" are looked as "peers" for a node. A node will management the connections for neighbor peers and provide some services for other nodes. We use [gRPC](https://grpc.io/) for communication between the node and neighbor peers.
 
 ```text
-                        gRPC
-                          |
-                          v      +----+
-                +----connection->+peer|
-                |                +----+
-                |
-                |
-                |
-            +---+--+             +----+
-Service---> | node +-connection->+peer|
-            +---+--+             +----+
-                |
-                |
-                |
-                |                +----+
-                +----connection->+peer|
-                                 +----+
+                                gRPC
+                                  |
+                                  v       +----+
+                       +-----connection-->+peer|
+                       |                  +----+
+                       |
+                       |
+                       |
+                   +---+--+               +----+
++----Service---+-->+ node +--connection-->+peer|
+|PeerManager   |   +---+--+               +----+
+|MessageManager|       |
++--------------+       |
+                       |
+                       |                  +----+
+                       +-----connection-->+peer|
+                                          +----+
 ```
 
 ## Install
