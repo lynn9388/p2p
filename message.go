@@ -40,7 +40,7 @@ type hashLog struct {
 
 // MessageManager is the service to receive and process messages.
 type MessageManager struct {
-	ProcessSet map[string]Process // process for each message
+	ProcessSet map[string]Process // process for every message type
 	MessageLog []hashLog          // hash and time of recent sent/received messages
 }
 

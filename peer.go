@@ -74,12 +74,9 @@ func NewPeerManager(self string) *PeerManager {
 	}
 }
 
-// AddPeers adds peers to the peer manager if a peer's network address is
-// unknown before.
-func (pm *PeerManager) AddPeers(addresses ...string) {
-	pm.Mux.Lock()
-	defer pm.Mux.Unlock()
-
+// addPeers adds peers to the peer manager if a peer's network address is
+// unknown before. This method is not thread-safe,
+func (pm *PeerManager) addPeers(addresses ...string) {
 	for _, addr := range addresses {
 		if addr != pm.addr {
 			if _, ok := pm.Peers[addr]; !ok {
@@ -88,6 +85,15 @@ func (pm *PeerManager) AddPeers(addresses ...string) {
 			}
 		}
 	}
+}
+
+// AddPeers adds peers to the peer manager if a peer's network address is
+// unknown before.
+func (pm *PeerManager) AddPeers(addresses ...string) {
+	pm.Mux.Lock()
+	defer pm.Mux.Unlock()
+
+	pm.addPeers(addresses...)
 }
 
 // RemovePeer removes a peer from the peer manager. It disconnects the
@@ -142,33 +148,20 @@ func (pm *PeerManager) GetPeerState(addr string) connectivity.State {
 
 // GetConnection returns a connection to a peer.
 func (pm *PeerManager) GetConnection(addr string) (*grpc.ClientConn, error) {
-	pm.Mux.RLock()
-	p, ok := pm.Peers[addr]
-	pm.Mux.RUnlock()
-	if !ok {
-		pm.AddPeers(addr)
-	}
-
 	pm.Mux.Lock()
 	defer pm.Mux.Unlock()
+
+	p, ok := pm.Peers[addr]
+	if !ok {
+		pm.addPeers(addr)
+	}
 
 	p, ok = pm.Peers[addr]
 	if !ok {
 		return nil, fmt.Errorf("failed to get connection to peer: %v", addr)
 	}
 
-	var state connectivity.State
-	if p.conn != nil {
-		state = p.conn.GetState()
-
-		if state != connectivity.Idle && state != connectivity.Ready {
-			if err := pm.disconnect(addr); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	if p.conn == nil || state != connectivity.Idle && state != connectivity.Ready {
+	if p.conn == nil || p.conn.GetState() == connectivity.Shutdown {
 		conn, err := grpc.Dial(addr, grpc.WithInsecure())
 		if err != nil {
 			return nil, err

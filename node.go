@@ -40,21 +40,18 @@ import (
 type Node struct {
 	Addr            string         // network address
 	Server          *grpc.Server   // gRPC server
-	waiter          sync.WaitGroup // wait server running in background
+	Waiter          sync.WaitGroup // wait server running in background
 	PeerManager     *PeerManager   // peer manager
 	*MessageManager                // message manager
-
 }
 
 var (
-	log     *zap.SugaredLogger // default logger
-	timeout time.Duration      // timeout for request rpc
+	log *zap.SugaredLogger // default logger
 )
 
 func init() {
 	logger, _ := zap.NewDevelopment()
 	log = logger.Sugar()
-	timeout = 5 * time.Second
 }
 
 // NewNode initials a new node with specific network address.
@@ -86,7 +83,7 @@ func (n *Node) StartServer() {
 	RegisterNodeServiceServer(n.Server, n)
 
 	log.Infof("server is listening at: %v", n.Addr)
-	n.waiter.Add(1)
+	n.Waiter.Add(1)
 	go n.Server.Serve(lis)
 }
 
@@ -95,17 +92,17 @@ func (n *Node) StopServer() {
 	if n.Server != nil {
 		n.Server.Stop()
 		log.Infof("server stopped: %v", n.Addr)
-		n.waiter.Done()
+		n.Waiter.Done()
 	}
 }
 
 // Wait keeps the server of the node running in background.
 func (n *Node) Wait() {
-	n.waiter.Wait()
+	n.Waiter.Wait()
 }
 
 // SendMessage sends a message to a peer.
-func (n *Node) SendMessage(addr string, msg proto.Message) (*any.Any, error) {
+func (n *Node) SendMessage(addr string, msg proto.Message, timeout time.Duration) (*any.Any, error) {
 	conn, err := n.PeerManager.GetConnection(addr)
 	if err != nil {
 		return nil, err
@@ -114,7 +111,7 @@ func (n *Node) SendMessage(addr string, msg proto.Message) (*any.Any, error) {
 }
 
 // Broadcast sends a broadcast message to the neighbor peers.
-func (n *Node) Broadcast(msg proto.Message) error {
+func (n *Node) Broadcast(msg proto.Message, timeout time.Duration) error {
 	anyMsg, err := ptypes.MarshalAny(msg)
 	if err != nil {
 		return err
@@ -125,7 +122,7 @@ func (n *Node) Broadcast(msg proto.Message) error {
 	for _, addr := range n.PeerManager.GetPeers() {
 		wg.Add(1)
 		go func(addr string) {
-			if err := n.SendBroadcast(addr, anyMsg); err != nil {
+			if err := n.SendBroadcast(addr, anyMsg, timeout); err != nil {
 				log.Errorf("failed to broadcast message to peer: %v : %v", addr, err)
 				buff.WriteString(err.Error() + "\n")
 			}
@@ -140,7 +137,7 @@ func (n *Node) Broadcast(msg proto.Message) error {
 }
 
 // SendBroadcast sends a broadcast message to a peers.
-func (n *Node) SendBroadcast(addr string, msg *any.Any) error {
+func (n *Node) SendBroadcast(addr string, msg *any.Any, timeout time.Duration) error {
 	conn, err := n.PeerManager.GetConnection(addr)
 	if err != nil {
 		return err
@@ -200,7 +197,7 @@ func (n *Node) ReceiveBroadcast(ctx context.Context, msg *any.Any) (*any.Any, er
 	for _, addr := range n.PeerManager.GetPeers() {
 		if addr != addresses[0] {
 			go func() {
-				if err := n.SendBroadcast(addr, msg); err != nil {
+				if err := n.SendBroadcast(addr, msg, 10*time.Second); err != nil {
 					log.Error(err)
 				}
 			}()

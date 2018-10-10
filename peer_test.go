@@ -152,7 +152,6 @@ func TestPeerManager_DisconnectAll(t *testing.T) {
 			t.Errorf("failed to disconnect peer: %v %v(expect SHUTDOWN)", addr, state)
 		}
 	}
-
 }
 
 func TestPeerManager_discoverPeers(t *testing.T) {

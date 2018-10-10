@@ -17,11 +17,50 @@
 package p2p
 
 import (
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/wrappers"
 )
+
+func TestNode_SendMessage(t *testing.T) {
+	sender := NewNode(tests[0])
+	sender.StartServer()
+	defer sender.StopServer()
+
+	receiver := NewNode(tests[1])
+	receiver.RegisterProcess(&wrappers.StringValue{}, checkStringMessage)
+	receiver.StartServer()
+	defer receiver.StopServer()
+
+	waiter := sync.WaitGroup{}
+	for i := 0; i < 10; i++ {
+		waiter.Add(1)
+		go func() {
+			reply, err := sender.SendMessage(receiver.Addr, &wrappers.StringValue{Value: testSendMsg}, 10*time.Second)
+			if err != nil {
+				t.Error(err)
+				waiter.Done()
+				return
+			}
+
+			m := &wrappers.StringValue{}
+			if err = ptypes.UnmarshalAny(reply, m); err != nil {
+				t.Error(err)
+				waiter.Done()
+				return
+			}
+
+			if m.Value != testReplyMsg {
+				t.Errorf("faild to receive reply: %v", m.Value)
+			}
+			waiter.Done()
+		}()
+	}
+	waiter.Wait()
+}
 
 func TestNode_Broadcast(t *testing.T) {
 	var nodes []*Node
@@ -38,7 +77,7 @@ func TestNode_Broadcast(t *testing.T) {
 	nodes[2].PeerManager.AddPeers(nodes[0].Addr, nodes[3].Addr)
 	nodes[3].PeerManager.AddPeers(nodes[1].Addr, nodes[2].Addr)
 
-	if err := nodes[0].Broadcast(&wrappers.StringValue{Value: testSendMsg}); err != nil {
+	if err := nodes[0].Broadcast(&wrappers.StringValue{Value: testSendMsg}, 10*time.Second); err != nil {
 		t.Error(err)
 	}
 	time.Sleep(1 * time.Second)
