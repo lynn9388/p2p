@@ -83,8 +83,8 @@ func TestNode_Broadcast(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	for _, node := range nodes {
-		if len(node.MessageLog) != 2 {
-			t.Errorf("%v failed to broadcast message: %v(expecte 2)", node.Addr, len(node.MessageLog))
+		if len(node.MessageLogs) != 2 {
+			t.Errorf("%v failed to broadcast message: %v(expecte 2)", node.Addr, len(node.MessageLogs))
 		}
 	}
 }

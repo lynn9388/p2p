@@ -33,7 +33,6 @@ import (
 	"github.com/golang/protobuf/ptypes/any"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 )
 
 // Node is a independent entity in the P2P network.
@@ -107,26 +106,37 @@ func (n *Node) SendMessage(addr string, msg proto.Message, timeout time.Duration
 	if err != nil {
 		return nil, err
 	}
-	return n.MessageManager.SendMessage(context.Background(), conn, msg, timeout)
+	return n.MessageManager.SendMessage(context.Background(), n.Addr, conn, msg, timeout)
 }
 
-// Broadcast sends a broadcast message to the neighbor peers.
-func (n *Node) Broadcast(msg proto.Message, timeout time.Duration) error {
-	anyMsg, err := ptypes.MarshalAny(msg)
-	if err != nil {
-		return err
-	}
-
+// broadcast sends a broadcast to neighbor peers.
+func (n *Node) broadcast(ctx context.Context, msg *any.Any, timeout time.Duration) error {
 	var buff bytes.Buffer
 	var wg sync.WaitGroup
 	for _, addr := range n.PeerManager.GetPeers() {
+		if n.existRelevantMessage(msg, addr) {
+			continue
+		}
+
 		wg.Add(1)
 		go func(addr string) {
-			if err := n.SendBroadcast(addr, anyMsg, timeout); err != nil {
-				log.Errorf("failed to broadcast message to peer: %v : %v", addr, err)
+			defer wg.Done()
+
+			conn, err := n.PeerManager.GetConnection(addr)
+			if err != nil {
+				buff.WriteString(err.Error() + "\n")
+				return
+			}
+
+			ctx = newContextWithSender(ctx, n.Addr)
+			ctx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+
+			n.MessageLogs = append(n.MessageLogs, messageLog{hash: hash(msg.Value), receiver: addr, time: time.Now()})
+			_, err = NewNodeServiceClient(conn).ReceiveBroadcast(ctx, msg)
+			if err != nil {
 				buff.WriteString(err.Error() + "\n")
 			}
-			wg.Done()
 		}(addr)
 	}
 	wg.Wait()
@@ -136,73 +146,62 @@ func (n *Node) Broadcast(msg proto.Message, timeout time.Duration) error {
 	return nil
 }
 
-// SendBroadcast sends a broadcast message to a peers.
-func (n *Node) SendBroadcast(addr string, msg *any.Any, timeout time.Duration) error {
-	conn, err := n.PeerManager.GetConnection(addr)
+// Broadcast sends a broadcast message to neighbor peers.
+func (n *Node) Broadcast(msg proto.Message, timeout time.Duration) error {
+	anyMsg, err := ptypes.MarshalAny(msg)
 	if err != nil {
 		return err
 	}
-
-	client := NewNodeServiceClient(conn)
-
-	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("address", n.Addr))
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	n.MessageLog = append(n.MessageLog, hashLog{hash: hash(msg.Value), time: time.Now()})
-	_, err = client.ReceiveBroadcast(ctx, msg)
-	return err
+	return n.broadcast(context.Background(), anyMsg, timeout)
 }
 
 // ReceiveBroadcast receives message and relay message to neighbor peers.
 // The node will not broadcast messages with same content within 1 minutes.
 func (n *Node) ReceiveBroadcast(ctx context.Context, msg *any.Any) (*any.Any, error) {
-	printError := func(err error) error {
+	sender, err := getSender(ctx)
+	if err != nil {
 		log.Error(err)
-		return err
+		return nil, err
 	}
 
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, printError(errors.New("failed to get metadata from context"))
-	}
-	addresses := md.Get("address")
-	if len(addresses) != 1 {
-		return nil, printError(errors.New("failed to get address of message sender from context"))
-	}
-
-	hash := hash(msg.Value)
-	now := time.Now()
-	for i := len(n.MessageLog) - 1; i >= 0; i-- {
-		if n.MessageLog[i].time.Add(1 * time.Minute).Before(now) {
-			break
-		}
-
-		if n.MessageLog[i].hash == hash {
-			err := fmt.Errorf("%v received duplicate message from peer: %v", n.Addr, addresses[0])
-			log.Debug(err)
-			return &any.Any{}, nil
-		}
+	if n.existRelevantMessage(msg, "") {
+		err := fmt.Errorf("%v received duplicate message from peer: %v", n.Addr, sender)
+		log.Debug(err)
+		return &any.Any{}, nil
 	}
 
 	name := path.Base(msg.TypeUrl)
 	p, ok := n.ProcessSet[name]
 	if !ok {
-		return nil, printError(fmt.Errorf("failed to find process for message type: %v", name))
+		return nil, fmt.Errorf("failed to find process for message type: %v", name)
 	}
-	n.MessageLog = append(n.MessageLog, hashLog{hash: hash, time: now})
+	n.MessageLogs = append(n.MessageLogs, messageLog{hash: hash(msg.Value), sender: sender, time: time.Now()})
 
-	log.Debugf("%v received broadcast message from peer: %v", n.Addr, addresses[0])
+	log.Debugf("%v received broadcast message from peer: %v", n.Addr, sender)
 
-	for _, addr := range n.PeerManager.GetPeers() {
-		if addr != addresses[0] {
-			go func() {
-				if err := n.SendBroadcast(addr, msg, 10*time.Second); err != nil {
-					log.Error(err)
-				}
-			}()
+	err = n.broadcast(context.Background(), msg, 10*time.Second)
+	if err != nil {
+		log.Error(err)
+	}
+
+	return p(msg)
+}
+
+// existRelevantMessage checks if a message log's sender or receivers is
+// equal to an address.
+func (n *Node) existRelevantMessage(msg *any.Any, addr string) bool {
+	hash := hash(msg.Value)
+	timeline := time.Now().Add(-1 * time.Minute)
+	for i := len(n.MessageLogs) - 1; i >= 0; i-- {
+		log := n.MessageLogs[i]
+
+		if log.time.Before(timeline) {
+			break
+		}
+
+		if log.hash == hash && log.sender == addr || log.receiver == addr {
+			return true
 		}
 	}
-
-	return p(ctx, msg)
+	return false
 }

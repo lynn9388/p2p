@@ -32,7 +32,7 @@ var (
 	testReplyMsg = "9388"
 )
 
-func checkStringMessage(ctx context.Context, msg *any.Any) (*any.Any, error) {
+func checkStringMessage(msg *any.Any) (*any.Any, error) {
 	var err error
 	m := &wrappers.StringValue{}
 	if err = ptypes.UnmarshalAny(msg, m); err != nil {
@@ -65,12 +65,12 @@ func TestMessageManager(t *testing.T) {
 
 	mm := NewMessageManager()
 
-	_, err = mm.SendMessage(context.Background(), conn, &wrappers.StringValue{Value: testSendMsg}, 0)
+	_, err = mm.SendMessage(context.Background(), tests[1], conn, &wrappers.StringValue{Value: testSendMsg}, 0)
 	if err == nil {
 		t.Error("failed to timeout")
 	}
 
-	reply, err := mm.SendMessage(context.Background(), conn, &wrappers.StringValue{Value: testSendMsg}, 1*time.Second)
+	reply, err := mm.SendMessage(context.Background(), tests[1], conn, &wrappers.StringValue{Value: testSendMsg}, 1*time.Second)
 	if err != nil {
 		t.Error(err)
 	}
